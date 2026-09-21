@@ -31,8 +31,8 @@ def test_write_keeps_accumulated_fields(tmp_path):
     assert second["created_at"] == first["created_at"]
 
 
-def test_lot_sources(tmp_path):
+def test_lot_index(tmp_path):
     cases.ingest(SAMPLE, tmp_path)
-    sources = cases.lot_sources(tmp_path)
-    assert sources["64557536"] == cases.Source(
-        Path("cases/COPART/2026-09-18/LotSearchresults_001.csv"), 2)
+    source, lot = cases.lot_index(tmp_path)["64557536"]
+    assert source == cases.Source(Path("cases/COPART/2026-09-18/LotSearchresults_001.csv"), 2)
+    assert lot.make == "INFINITI"

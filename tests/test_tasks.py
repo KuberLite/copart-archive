@@ -38,3 +38,13 @@ def test_lot_missing_from_cases_is_reported(tmp_path):
     result = tasks.prepare(SAMPLE, tmp_path, config.load())
     assert len(result.not_in_cases) == 11
     assert metadata.read(result.dirs[0])["source"] is None
+
+
+def test_prepare_from_lot_numbers_only(tmp_path):
+    cases.ingest(SAMPLE, tmp_path)
+    task = tmp_path / "task.csv"
+    task.write_bytes("Lot #;Комментарий\n64557536;берём\n11111111;нет такого\n".encode("cp1251"))
+    result = tasks.prepare(task, tmp_path, config.load())
+    assert [d.name for d in result.dirs] == ["COPART_64557536"]
+    assert result.unplaced == ["11111111"]
+    assert metadata.read(result.dirs[0])["source"]["row"] == 2

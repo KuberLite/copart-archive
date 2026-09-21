@@ -21,7 +21,7 @@ python3 -m venv .venv
 # 2. client filters: a report and a task file with the lots that passed
 .venv/bin/copart-archive filter archive/cases/COPART/2026-09-18/*.csv --out task.csv
 
-# 3. lot folders and metadata.json from a task file
+# 3. lot folders and metadata.json from a task file (xlsx or csv, needs "Lot #" or "Lot URL")
 .venv/bin/copart-archive prepare task.csv
 ```
 
