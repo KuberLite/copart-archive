@@ -15,7 +15,7 @@ class Config:
     photo_quality: str
 
     def group_for(self, damage: str) -> str | None:
-        """Группа для значения повреждения Copart, None — если вне групп."""
+        """Group for a Copart damage value, or None if it is outside all groups."""
         damage = damage.strip().upper()
         for group, values in self.damage_groups.items():
             if damage in values:

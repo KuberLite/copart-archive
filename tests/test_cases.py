@@ -14,7 +14,7 @@ def test_ingest_copies_bytes_and_writes_manifest(tmp_path):
     result = cases.ingest(SAMPLE, tmp_path)
     assert result.path == tmp_path / "cases/COPART/2026-09-18/LotSearchresults_001.csv"
     assert result.path.read_bytes() == SAMPLE.read_bytes()
-    assert not result.path.stat().st_mode & 0o222  # только чтение
+    assert not result.path.stat().st_mode & 0o222  # read-only
 
     [entry] = json.loads((result.path.parent / "manifest.json").read_text())
     assert entry["source_name"] == SAMPLE.name

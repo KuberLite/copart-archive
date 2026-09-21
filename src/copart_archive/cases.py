@@ -1,4 +1,4 @@
-"""Слой cases: исходные таблицы аукциона. Копируются байт в байт и больше не меняются."""
+"""The cases layer: raw auction tables, copied byte for byte and never changed."""
 
 import hashlib
 import json
@@ -19,7 +19,7 @@ NAME_RE = re.compile(r"LotSearchresults_(\d{3,})\.csv")
 @dataclass(frozen=True)
 class Ingested:
     path: Path
-    duplicate: bool  # такой файл уже был принят — повторно не копируем
+    duplicate: bool  # this file was already ingested; not copied again
 
 
 def day_dir(root: Path, day: date) -> Path:
@@ -27,7 +27,7 @@ def day_dir(root: Path, day: date) -> Path:
 
 
 def sale_day(path: Path) -> date:
-    """День торгов из самой таблицы. Если дней несколько — пусть укажут явно."""
+    """Sale day taken from the table itself. If there are several, it must be given explicitly."""
     days = {lot.sale_date for lot in lotsearch.read(path)}
     if len(days) != 1 or None in days:
         raise ValueError(f"{path.name}: в файле дни {sorted(map(str, days))}, укажите дату явно")
@@ -59,7 +59,7 @@ def _next_name(directory: Path) -> str:
 
 
 def ingest(source: Path, root: Path, day: date | None = None) -> Ingested:
-    lots = lotsearch.read(source)  # заодно проверка формата до копирования
+    lots = lotsearch.read(source)  # also validates the format before copying
     day = day or sale_day(source)
     directory = day_dir(root, day)
     directory.mkdir(parents=True, exist_ok=True)
@@ -88,13 +88,13 @@ def ingest(source: Path, root: Path, day: date | None = None) -> Ingested:
 
 @dataclass(frozen=True)
 class Source:
-    file: Path  # относительно корня архива
+    file: Path  # relative to the archive root
     row: int
 
 
 def lot_sources(root: Path) -> dict[str, Source]:
-    """Где каждый лот лежит в cases/. Если лот есть в нескольких снимках,
-    берётся самый свежий: дни и номера файлов идут по возрастанию."""
+    """Where each lot lives in cases/. If a lot appears in several snapshots,
+    the latest wins: days and file numbers sort in ascending order."""
     base = root / "cases" / AUCTION
     found: dict[str, Source] = {}
     for path in sorted(base.glob("*/LotSearchresults_*.csv")):

@@ -1,4 +1,4 @@
-"""Чтение CSV-выгрузки Copart (кнопка Export в поиске / списке продажи)."""
+"""Reads the Copart CSV export (the Export button in search / sale list)."""
 
 import csv
 import re
@@ -12,7 +12,7 @@ REQUIRED_COLUMNS = (
     "Odometer description", "Damage description", "Sale name",
 )
 
-# Copart пишет пояс аббревиатурой, какой выбран в аккаунте.
+# Copart writes the time zone as an abbreviation, whichever the account uses.
 TZ_OFFSETS = {
     "MSK": 3, "UTC": 0, "GMT": 0,
     "EST": -5, "EDT": -4, "CST": -6, "CDT": -5,
@@ -21,7 +21,7 @@ TZ_OFFSETS = {
 
 
 class SchemaError(ValueError):
-    """В CSV нет нужных колонок — Copart поменял формат выгрузки."""
+    """Required columns are missing: Copart changed the export format."""
 
 
 @dataclass(frozen=True)
@@ -45,7 +45,7 @@ class Lot:
     est_retail_usd: int | None
     engine: str
     cylinders: str
-    row: int  # номер строки в файле, заголовок — 1
+    row: int  # line number in the file; the header is 1
     raw: dict[str, str]
 
     @property
@@ -59,7 +59,7 @@ def _int(text: str) -> int | None:
 
 
 def parse_sale_date(text: str) -> tuple[date | None, datetime | None]:
-    """'09/18/2026 04:00 am MSK' -> (дата, время с поясом, если пояс известен)."""
+    """'09/18/2026 04:00 am MSK' -> (date, aware datetime if the zone is known)."""
     m = re.fullmatch(r"(\d{2}/\d{2}/\d{4}) (\d{1,2}:\d{2} [ap]m)(?: (\w+))?", text.strip(), re.I)
     if not m:
         return None, None
@@ -70,18 +70,18 @@ def parse_sale_date(text: str) -> tuple[date | None, datetime | None]:
 
 
 def parse_sale_name(text: str) -> tuple[str | None, str]:
-    """'FL - ORLANDO SOUTH' -> ('FL', 'ORLANDO SOUTH'); спецпродажи — без штата."""
+    """'FL - ORLANDO SOUTH' -> ('FL', 'ORLANDO SOUTH'); special sales have no state."""
     m = re.fullmatch(r"([A-Z]{2}) - (.+)", text.strip())
     return (m[1], m[2]) if m else (None, text.strip())
 
 
 def parse_odometer(text: str) -> int | None:
-    """'108,972 A' -> 108972. Буква — код, он дублирует колонку описания."""
+    """'108,972 A' -> 108972. The letter is a code that duplicates the description column."""
     return _int(text.split()[0]) if text.strip() else None
 
 
 def parse_usd(text: str) -> int | None:
-    """'14,886 USD' -> 14886. Ноль Copart ставит, когда оценки нет."""
+    """'14,886 USD' -> 14886. Copart puts zero when there is no estimate."""
     value = _int(text)
     return value or None
 

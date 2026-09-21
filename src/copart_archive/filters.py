@@ -1,4 +1,4 @@
-"""Фильтры заказчика по строкам CSV. Ничего не отсеивается молча — всё в отчёте."""
+"""Client filters over CSV rows. Nothing is dropped silently; everything is reported."""
 
 from collections import Counter
 from dataclasses import dataclass, field
@@ -11,7 +11,7 @@ from .lotsearch import Lot
 class FilterResult:
     passed: list[Lot] = field(default_factory=list)
     rejected: Counter[str] = field(default_factory=Counter)
-    # отсеянные по повреждению / марке — чтобы видеть, не пора ли расширить списки
+    # rejected by damage / make, to see whether the lists need extending
     other_damage: Counter[str] = field(default_factory=Counter)
     other_makes: Counter[str] = field(default_factory=Counter)
 
@@ -32,7 +32,7 @@ class FilterResult:
 def reject_reason(lot: Lot, cfg: Config) -> str | None:
     if lot.year is None or lot.year < cfg.year_min:
         return "year"
-    if lot.make not in cfg.makes:  # только точное совпадение: есть «HYUNDAI TRANSLEAD INC»
+    if lot.make not in cfg.makes:  # exact match only: "HYUNDAI TRANSLEAD INC" is a trailer maker
         return "make"
     if cfg.group_for(lot.primary_damage) is None:
         return "damage"

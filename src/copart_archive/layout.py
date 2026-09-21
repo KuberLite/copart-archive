@@ -1,8 +1,8 @@
-"""Дерево фото: photos/<ГРУППА>/<МАРКА>/<ГОД>/<МОДЕЛЬ>/COPART_<лот>/.
+"""Photo tree: photos/<GROUP>/<MAKE>/<YEAR>/<MODEL>/COPART_<lot>/.
 
-Архив смотрят с Windows через сетевой диск, поэтому имена приводятся
-к тому, что Windows примет: без <>:"/\\|?*, без точки/пробела в конце,
-без зарезервированных имён. Регистр верхний — Windows его не различает.
+The archive is browsed from Windows over a network share, so names are made
+Windows-safe: no <>:"/\\|?*, no trailing dot/space, no reserved names.
+Upper case, since Windows is case-insensitive.
 """
 
 import re
@@ -38,8 +38,8 @@ def lot_dir(root: Path, lot: Lot, cfg: Config) -> Path:
 
 
 def existing_lot_dirs(root: Path) -> dict[str, Path]:
-    """Уже заведённые папки лотов. Если Copart потом поправит марку или
-    повреждение, лот остаётся там, где его завели, а не раздваивается."""
+    """Existing lot folders. If Copart later corrects the make or damage,
+    the lot stays where it was first placed instead of being duplicated."""
     base = root / PHOTOS
     if not base.exists():
         return {}

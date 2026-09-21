@@ -11,7 +11,7 @@ def test_apply_on_sample():
         "64557536",  # INFINITI QX60, FRONT END
         "68979086",  # FORD EXPEDITION, WATER/FLOOD
         "64896396",  # MERCEDES-BENZ SPRINTER, SIDE
-        "59110736",  # HONDA CBR500, SIDE — тип ТС в CSV не определить
+        "59110736",  # HONDA CBR500, SIDE — vehicle type is not in the CSV
         "62546106",  # LAND ROVER
     }
     assert result.rejected == {"year": 3, "make": 2, "damage": 1}

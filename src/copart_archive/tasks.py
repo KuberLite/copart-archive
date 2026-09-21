@@ -1,4 +1,4 @@
-"""Задача на фото: файл с лотами, который присылает заказчик."""
+"""Photo task: a file with lots sent by the client."""
 
 from collections import Counter
 from dataclasses import dataclass, field
@@ -24,8 +24,8 @@ class Prepared:
 
 
 def prepare(task_file: Path, root: Path, cfg: Config) -> Prepared:
-    """Заводит папки лотов и metadata.json. Фильтры не применяются:
-    что заказчик прислал, то и берём; повреждение вне групп — в Other."""
+    """Creates lot folders and metadata.json. Filters are not applied:
+    whatever the client sent is taken; damage outside groups goes to Other."""
     lots = lotsearch.read(task_file)
     sources = cases.lot_sources(root)
     existing = layout.existing_lot_dirs(root)

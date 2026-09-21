@@ -1,29 +1,29 @@
 # copart-archive
 
-Архив фотографий лотов Copart.
+Photo archive of Copart lots.
 
-- `archive/cases/COPART/<дата>/` — исходные таблицы аукционов (RAW, не изменяются)
-- `archive/photos/<ПОВРЕЖДЕНИЕ>/<МАРКА>/<ГОД>/<МОДЕЛЬ>/COPART_<лот>/` — фото + `metadata.json`
+- `archive/cases/COPART/<date>/` — raw auction tables (never modified)
+- `archive/photos/<DAMAGE>/<MAKE>/<YEAR>/<MODEL>/COPART_<lot>/` — photos + `metadata.json`
 
-## Установка
+## Setup
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -e '.[dev]'
 ```
 
-## Работа
+## Usage
 
 ```bash
-# 1. таблицу аукциона — в cases/ (копия как есть, день берётся из Sale date)
+# 1. put an auction table into cases/ (copied as is; the day comes from Sale date)
 .venv/bin/copart-archive ingest LotSearchresults.csv
 
-# 2. фильтры заказчика: отчёт и файл-задача с прошедшими лотами
+# 2. client filters: a report and a task file with the lots that passed
 .venv/bin/copart-archive filter archive/cases/COPART/2026-09-18/*.csv --out task.csv
 
-# 3. папки лотов и metadata.json по файлу-задаче
+# 3. lot folders and metadata.json from a task file
 .venv/bin/copart-archive prepare task.csv
 ```
 
-Корень архива — `./archive`, меняется через `--root` или `COPART_ARCHIVE_ROOT`.
-Фильтры и группы повреждений — `config/archive.toml`.
+The archive root is `./archive`; override with `--root` or `COPART_ARCHIVE_ROOT`.
+Filters and damage groups live in `config/archive.toml`.

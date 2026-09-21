@@ -35,7 +35,7 @@ def cmd_prepare(args: argparse.Namespace) -> int:
 
 
 def write_lots(path: Path, lots: list[lotsearch.Lot]) -> None:
-    """Строки в исходном формате выгрузки — такой файл можно отдать в задачу на фото."""
+    """Rows in the original export format, so the file can be used as a photo task."""
     columns = list(lots[0].raw) if lots else list(lotsearch.REQUIRED_COLUMNS)
     with open(path, "w", encoding="utf-8-sig", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=columns)

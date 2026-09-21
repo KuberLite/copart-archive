@@ -1,1 +1,1 @@
-"""Архив фото лотов Copart."""
+"""Copart lot photo archive."""

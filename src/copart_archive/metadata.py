@@ -1,4 +1,4 @@
-"""metadata.json в папке лота."""
+"""metadata.json in a lot folder."""
 
 import json
 import os
@@ -17,13 +17,13 @@ def build(lot: Lot, group: str, source: Source | None) -> dict:
         "schema_version": SCHEMA_VERSION,
         "auction": AUCTION,
         "lot": lot.lot,
-        "vin": lot.vin,  # Copart маскирует хвост звёздочками — оставляем как есть
+        "vin": lot.vin,  # Copart masks the tail with asterisks; kept as is
         "year": lot.year,
         "make": lot.make,
         "model": lot.model,
-        "trim": None,  # в CSV-выгрузке трима нет
+        "trim": None,  # not in the CSV export
         "primary_damage": lot.primary_damage,
-        "secondary_damage": None,  # в CSV-выгрузке нет
+        "secondary_damage": None,  # not in the CSV export
         "damage_group": group,
         "sale_date": lot.sale_date.isoformat() if lot.sale_date else None,
         "sale_datetime": lot.sale_datetime.isoformat() if lot.sale_datetime else None,
@@ -48,8 +48,8 @@ def read(lot_dir: Path) -> dict | None:
 
 
 def write(lot_dir: Path, data: dict) -> None:
-    """Обновляет поля из свежих данных, но сохраняет то, что накоплено раньше
-    (дату создания, список фото)."""
+    """Updates fields from fresh data but keeps what was accumulated before
+    (creation date, photo list)."""
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     previous = read(lot_dir) or {}
     merged = {**previous, **data, "created_at": previous.get("created_at", now), "updated_at": now}
