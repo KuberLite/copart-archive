@@ -84,3 +84,20 @@ def ingest(source: Path, root: Path, day: date | None = None) -> Ingested:
     })
     _save_manifest(directory, manifest)
     return Ingested(target, duplicate=False)
+
+
+@dataclass(frozen=True)
+class Source:
+    file: Path  # относительно корня архива
+    row: int
+
+
+def lot_sources(root: Path) -> dict[str, Source]:
+    """Где каждый лот лежит в cases/. Если лот есть в нескольких снимках,
+    берётся самый свежий: дни и номера файлов идут по возрастанию."""
+    base = root / "cases" / AUCTION
+    found: dict[str, Source] = {}
+    for path in sorted(base.glob("*/LotSearchresults_*.csv")):
+        for lot in lotsearch.read(path):
+            found[lot.lot] = Source(path.relative_to(root), lot.row)
+    return found
