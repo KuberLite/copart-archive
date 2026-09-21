@@ -1,0 +1,27 @@
+# Фильтры заказчика. Список марок и групп — как дал заказчик, буквально.
+
+[filters]
+year_min = 2015  # верхней границы нет
+makes = [
+  "BMW", "MERCEDES-BENZ", "AUDI", "PORSCHE", "LAND ROVER", "TESLA", "LEXUS",
+  "VOLVO", "CADILLAC", "INFINITI", "ACURA", "JAGUAR", "TOYOTA", "HONDA",
+  "NISSAN", "HYUNDAI", "KIA", "VOLKSWAGEN", "MAZDA", "FORD", "JEEP",
+]
+
+# Группа = папка верхнего уровня в photos/. Значения — как пишет Copart.
+# Лот с повреждением вне групп в фильтр не проходит, а если пришёл
+# в задаче вручную — ложится в other_group.
+[damage_groups]
+Front_End = ["FRONT END"]
+Rear_End = ["REAR END"]
+Side = ["SIDE"]
+Flood = ["WATER/FLOOD"]
+Rollover = ["ROLLOVER"]
+All_Over = ["ALL OVER"]
+Undercarriage = ["UNDERCARRIAGE"]
+
+[layout]
+other_group = "Other"
+
+[photos]
+quality = "full"  # thumbnail | full | high_res
