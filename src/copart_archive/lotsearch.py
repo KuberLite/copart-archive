@@ -20,6 +20,11 @@ TZ_OFFSETS = {
 }
 
 
+def missing_columns(columns) -> list[str]:
+    present = set(columns or [])
+    return [c for c in REQUIRED_COLUMNS if c not in present]
+
+
 class SchemaError(ValueError):
     """Required columns are missing: Copart changed the export format."""
 
@@ -86,7 +91,7 @@ def parse_usd(text: str) -> int | None:
     return value or None
 
 
-def _lot(row: dict[str, str], line: int) -> Lot:
+def from_row(row: dict[str, str], line: int) -> Lot:
     sale_date, sale_datetime = parse_sale_date(row["Sale date"])
     state, yard = parse_sale_name(row["Sale name"])
     year = row["Year"].strip()
@@ -118,7 +123,7 @@ def _lot(row: dict[str, str], line: int) -> Lot:
 def read(path: Path) -> list[Lot]:
     with open(path, encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
-        missing = [c for c in REQUIRED_COLUMNS if c not in (reader.fieldnames or [])]
+        missing = missing_columns(reader.fieldnames)
         if missing:
             raise SchemaError(f"{path.name}: нет колонок {missing}")
-        return [_lot(row, reader.line_num) for row in reader]
+        return [from_row(row, reader.line_num) for row in reader]

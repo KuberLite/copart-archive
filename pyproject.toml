@@ -3,7 +3,7 @@ name = "copart-archive"
 version = "0.1.0"
 description = "Copart lot photo archive: raw auction tables and a photo tree by damage type"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = ["openpyxl>=3.1"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
