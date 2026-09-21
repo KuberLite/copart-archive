@@ -1,0 +1,22 @@
+[project]
+name = "copart-archive"
+version = "0.1.0"
+description = "Архив фото лотов Copart: RAW-таблицы аукционов и дерево фото по повреждениям"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+copart-archive = "copart_archive.cli:main"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
