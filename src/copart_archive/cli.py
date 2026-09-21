@@ -4,7 +4,7 @@ import os
 from datetime import date
 from pathlib import Path
 
-from . import cases, config, filters, lotsearch
+from . import cases, config, filters, lotsearch, tasks
 
 DEFAULT_ROOT = Path(os.environ.get("COPART_ARCHIVE_ROOT", "archive"))
 
@@ -25,6 +25,12 @@ def cmd_filter(args: argparse.Namespace) -> int:
     if args.out:
         write_lots(args.out, result.passed)
         print(f"Записано {len(result.passed)} строк: {args.out}")
+    return 0
+
+
+def cmd_prepare(args: argparse.Namespace) -> int:
+    result = tasks.prepare(args.task, args.root, config.load())
+    print(result.report())
     return 0
 
 
@@ -51,6 +57,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("csv", nargs="+", type=Path)
     p.add_argument("--out", type=Path, help="сохранить прошедшие лоты в CSV")
     p.set_defaults(func=cmd_filter)
+
+    p = commands.add_parser("prepare", help="завести папки лотов и metadata.json по файлу-задаче")
+    p.add_argument("task", type=Path)
+    p.set_defaults(func=cmd_prepare)
 
     args = parser.parse_args(argv)
     return args.func(args)
