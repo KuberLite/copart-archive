@@ -1,8 +1,20 @@
 import argparse
 import csv
+import os
+from datetime import date
 from pathlib import Path
 
-from . import config, filters, lotsearch
+from . import cases, config, filters, lotsearch
+
+DEFAULT_ROOT = Path(os.environ.get("COPART_ARCHIVE_ROOT", "archive"))
+
+
+def cmd_ingest(args: argparse.Namespace) -> int:
+    for source in args.csv:
+        result = cases.ingest(source, args.root, args.date)
+        status = "уже был" if result.duplicate else "принят"
+        print(f"{source.name} -> {result.path} ({status})")
+    return 0
 
 
 def cmd_filter(args: argparse.Namespace) -> int:
@@ -27,7 +39,13 @@ def write_lots(path: Path, lots: list[lotsearch.Lot]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="copart-archive")
+    parser.add_argument("--root", type=Path, default=DEFAULT_ROOT, help="корень архива")
     commands = parser.add_subparsers(dest="command", required=True)
+
+    p = commands.add_parser("ingest", help="положить CSV аукциона в cases/")
+    p.add_argument("csv", nargs="+", type=Path)
+    p.add_argument("--date", type=date.fromisoformat, help="день торгов, если в файле их несколько")
+    p.set_defaults(func=cmd_ingest)
 
     p = commands.add_parser("filter", help="применить фильтры заказчика к CSV")
     p.add_argument("csv", nargs="+", type=Path)
