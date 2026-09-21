@@ -41,17 +41,25 @@ def test_xlsx_prefers_all_lots_sheet_and_dedupes(tmp_path):
         "ALL_LOTS": [header, *typed, typed[0], [None] * len(header)],
     })
     task = taskfile.read(path)
-    assert task.sheet == "ALL_LOTS"
+    assert task.sheets == ["ALL_LOTS"]
     assert (task.total_rows, len(task.lots), task.duplicates) == (12, 11, 1)
     assert task.lots[0] == "64557536"
     assert task.rows["64557536"]["Year"] == "2019"
 
 
-def test_xlsx_without_all_lots_uses_first_sheet(tmp_path):
+def test_xlsx_without_all_lots_reads_every_lot_sheet(tmp_path):
     path = tmp_path / "task.xlsx"
-    make_xlsx(path, {"Лист1": [["Lot #"], [64557536.0]]})
+    make_xlsx(path, {
+        "Статистика": [["Марка", "Всего"], ["FORD", 1]],
+        "INFINITI": [["Lot #"], [64557536.0]],
+        "FORD": [["Lot #"], [68979086], [64557536]],
+    })
     task = taskfile.read(path)
-    assert task.sheet == "Лист1" and task.lots == ["64557536"]
+    assert task.sheets == ["INFINITI", "FORD"]
+    assert task.lots == ["64557536", "68979086"]
+    assert task.duplicates == 1
+    assert task.skipped_sheets == ["Статистика"]
+    assert "пропущены: Статистика" in task.report()
 
 
 def test_russian_excel_csv(tmp_path):
@@ -73,7 +81,7 @@ def test_invalid_rows_are_reported(tmp_path):
     path.write_text("Lot #\n64557536\nитого\n", encoding="utf-8")
     task = taskfile.read(path)
     assert task.lots == ["64557536"]
-    assert task.invalid == [(3, "итого")]
+    assert task.invalid == [("стр. 3", "итого")]
     assert "без номера лота: 1" in task.report()
 
 
@@ -87,5 +95,25 @@ def test_no_lot_column(tmp_path):
 def test_unsupported_extension(tmp_path):
     path = tmp_path / "task.pdf"
     path.write_bytes(b"%PDF")
+    with pytest.raises(taskfile.TaskFileError):
+        taskfile.read(path)
+
+
+def test_excel_unicode_text(tmp_path):
+    path = tmp_path / "task.txt"
+    path.write_bytes("Lot #\tMake\n64557536\tINFINITI\n".encode("utf-16"))
+    assert taskfile.read(path).lots == ["64557536"]
+
+
+def test_unknown_encoding(tmp_path):
+    path = tmp_path / "task.csv"
+    path.write_bytes(b"Lot #\n64557536\x98\n")  # 0x98 is invalid in both utf-8 and cp1251
+    with pytest.raises(taskfile.TaskFileError, match="кодировку"):
+        taskfile.read(path)
+
+
+def test_xlsx_without_lot_column(tmp_path):
+    path = tmp_path / "task.xlsx"
+    make_xlsx(path, {"Статистика": [["Марка", "Всего"], ["FORD", 1]]})
     with pytest.raises(taskfile.TaskFileError):
         taskfile.read(path)

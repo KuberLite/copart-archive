@@ -92,12 +92,13 @@ class Source:
     row: int
 
 
-def lot_index(root: Path) -> dict[str, tuple[Source, lotsearch.Lot]]:
-    """Every lot in cases/ with where it came from. If a lot appears in several
-    snapshots, the latest wins: days and file numbers sort in ascending order."""
+def lot_index(root: Path, wanted: set[str]) -> dict[str, tuple[Source, lotsearch.Lot]]:
+    """The wanted lots found in cases/, with where they came from. Only these
+    are kept: the whole history would not fit in memory. If a lot appears in
+    several snapshots, the latest wins: days and file numbers sort ascending."""
     base = root / "cases" / AUCTION
     found: dict[str, tuple[Source, lotsearch.Lot]] = {}
     for path in sorted(base.glob("*/LotSearchresults_*.csv")):
-        for lot in lotsearch.read(path):
+        for lot in lotsearch.iter_lots(path, wanted):
             found[lot.lot] = (Source(path.relative_to(root), lot.row), lot)
     return found

@@ -5,6 +5,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from typing import Iterator
 
 REQUIRED_COLUMNS = (
     "Lot URL", "Lot #", "Est. Retail value", "Sale date", "Year", "Make", "Model",
@@ -120,10 +121,17 @@ def from_row(row: dict[str, str], line: int) -> Lot:
     )
 
 
-def read(path: Path) -> list[Lot]:
+def iter_lots(path: Path, wanted: set[str] | None = None) -> Iterator[Lot]:
+    """Lots of a CSV export; with `wanted`, other rows are skipped unparsed."""
     with open(path, encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
         missing = missing_columns(reader.fieldnames)
         if missing:
             raise SchemaError(f"{path.name}: нет колонок {missing}")
-        return [from_row(row, reader.line_num) for row in reader]
+        for row in reader:
+            if wanted is None or row["Lot #"].strip() in wanted:
+                yield from_row(row, reader.line_num)
+
+
+def read(path: Path) -> list[Lot]:
+    return list(iter_lots(path))

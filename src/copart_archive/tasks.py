@@ -1,7 +1,7 @@
 """Photo task: a file with lots sent by the client."""
 
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from . import cases, layout, lotsearch, metadata, taskfile
@@ -34,7 +34,8 @@ def _lot_data(lot: str, task: taskfile.TaskFile, index) -> tuple[lotsearch.Lot |
         return data, source
     row = task.rows[lot]
     if not lotsearch.missing_columns(row):
-        return lotsearch.from_row(row, 0), None
+        # the number may have come from Lot URL while "Lot #" is blank
+        return replace(lotsearch.from_row(row, 0), lot=lot), None
     return None, None
 
 
@@ -43,7 +44,7 @@ def prepare(task_path: Path, root: Path, cfg: Config) -> Prepared:
     whatever the client sent is taken; damage outside groups goes to Other.
     Lot data comes from cases/ when available, otherwise from the task row."""
     task = taskfile.read(task_path)
-    index = cases.lot_index(root)
+    index = cases.lot_index(root, set(task.lots))
     existing = layout.existing_lot_dirs(root)
     result = Prepared(task=task)
 

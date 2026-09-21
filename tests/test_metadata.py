@@ -33,6 +33,8 @@ def test_write_keeps_accumulated_fields(tmp_path):
 
 def test_lot_index(tmp_path):
     cases.ingest(SAMPLE, tmp_path)
-    source, lot = cases.lot_index(tmp_path)["64557536"]
+    index = cases.lot_index(tmp_path, {"64557536", "11111111"})
+    assert list(index) == ["64557536"]  # only wanted lots are kept
+    source, lot = index["64557536"]
     assert source == cases.Source(Path("cases/COPART/2026-09-18/LotSearchresults_001.csv"), 2)
     assert lot.make == "INFINITI"

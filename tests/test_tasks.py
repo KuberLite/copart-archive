@@ -48,3 +48,19 @@ def test_prepare_from_lot_numbers_only(tmp_path):
     assert [d.name for d in result.dirs] == ["COPART_64557536"]
     assert result.unplaced == ["11111111"]
     assert metadata.read(result.dirs[0])["source"]["row"] == 2
+
+
+def test_lot_number_from_url_when_lot_column_blank(tmp_path):
+    import csv
+    with open(SAMPLE, encoding="utf-8-sig", newline="") as f:
+        rows = list(csv.DictReader(f))
+    for row in rows[:2]:
+        row["Lot #"] = ""
+    task = tmp_path / "task.csv"
+    with open(task, "w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows[:2])
+    result = tasks.prepare(task, tmp_path, config.load())
+    assert [d.name for d in result.dirs] == ["COPART_64557536", "COPART_68979086"]
+    assert metadata.read(result.dirs[0])["lot"] == "64557536"
