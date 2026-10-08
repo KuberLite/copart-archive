@@ -187,12 +187,15 @@ def build(settings: Settings, cfg: config.Config):
     @dp.message(F.document)
     async def document(message: Message) -> None:
         doc = message.document
+        log.info("файл от %s: %s, %s байт", message.from_user.id, doc.file_name, doc.file_size)
         if runner.busy or starting.locked():
+            log.info("отклонён: уже идёт загрузка")
             current = runner.current()
             await message.answer("Уже идёт загрузка" + (":\n" + describe_state(current) if current else ".")
                                  + f"\nДождитесь или нажмите «{STOP}».")
             return
         if doc.file_size and doc.file_size > MAX_FILE:
+            log.info("отклонён: больше 20 МБ")
             await message.answer(too_big_text(doc.file_size))
             return
         async with starting:
@@ -207,15 +210,20 @@ def build(settings: Settings, cfg: config.Config):
                 stored = await asyncio.to_thread(uploads.store, local, settings.root, name)
             job_plan = await asyncio.to_thread(jobs.plan, stored.table, settings.root, cfg)
         except FormatError as error:
+            log.info("не прочитан: %s", error)
             await message.answer(f"Не получилось прочитать файл: {error}")
             return
         except TelegramAPIError as error:  # e.g. the size was unknown and turned out too big
+            log.warning("Telegram не отдал файл: %s", error)
             await message.answer(f"Telegram не отдал файл: {error}")
             return
         except OSError as error:
             log.exception("не сохранил файл")
             await message.answer(f"Не получилось сохранить файл: {error}")
             return
+        log.info("сохранён %s%s; к загрузке %s лотов%s", stored.path.name,
+                 " (повтор)" if stored.duplicate else "", job_plan.count,
+                 f"; {job_plan.warning}" if job_plan.warning else "")
         text = job_plan.describe(cfg.photo_quality)
         if stored.duplicate:
             text = "Этот файл уже присылали — докачаю то, чего не хватает.\n\n" + text
@@ -233,9 +241,11 @@ def build(settings: Settings, cfg: config.Config):
                 log.debug("не обновил прогресс: %s", error)
 
         async def on_done(state: jobs.State) -> None:
+            log.info("загрузка %s: %s, %s", state.file, state.status, state.progress())
             await message.answer(describe_state(state) + "\n\n" + (state.summary or ""),
                                  reply_markup=keyboard)
 
+        log.info("загрузка началась: %s, %s лотов", name, job_plan.count)
         runner.start(job, asyncio.get_running_loop(), on_progress, on_done)
 
     @dp.message()
