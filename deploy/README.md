@@ -17,6 +17,8 @@ ssh root@HOST 'DETACH=1 /opt/copart-archive/run.sh photos /input/SalesData.csv -
 ssh root@HOST 'docker logs -f copart-archive-run'
 ```
 
+Клиентский доступ к архиву — [sftp.md](sftp.md).
+
 Keep `ssh -o ServerAliveInterval=15` when watching a run: this host closes
 sessions that go quiet for a minute or two.
 
