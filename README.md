@@ -18,8 +18,11 @@ The main input is the Sales Data subscription file: it carries the full VIN, the
 trim, the secondary damage and an "Image URL" pointing at Copart's image API,
 which is where the photos come from.
 
+Client filters from `config/archive.toml` are applied by default — a subscription
+file holds tens of thousands of lots. Pass `--no-filter` to take everything.
+
 ```bash
-# estimate first: how many lots and how much disk
+# estimate first: how many lots pass the filters and how much disk they need
 .venv/bin/copart-archive photos SalesData.csv --dry-run
 
 # lot folders, metadata.json and every photo of each lot

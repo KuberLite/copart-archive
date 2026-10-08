@@ -30,7 +30,8 @@ def cmd_filter(args: argparse.Namespace) -> int:
 
 
 def cmd_prepare(args: argparse.Namespace) -> int:
-    result = tasks.prepare(args.task, args.root, config.load())
+    result = tasks.prepare(args.task, args.root, config.load(),
+                           use_filters=args.filter, limit=args.limit)
     print(result.report())
     return 0
 
@@ -39,10 +40,10 @@ def cmd_photos(args: argparse.Namespace) -> int:
     cfg = config.load()
     if args.quality:
         cfg = replace(cfg, photo_quality=args.quality)
-    prepared = tasks.prepare(args.file, args.root, cfg)
+    prepared = tasks.prepare(args.file, args.root, cfg, use_filters=args.filter, limit=args.limit)
     print(prepared.report())
 
-    pairs = list(zip(prepared.dirs, prepared.lots))[:args.limit]
+    pairs = list(zip(prepared.dirs, prepared.lots))
     estimate = photos.estimate_bytes(len(pairs), cfg.photo_quality)
     free = photos.free_bytes(args.root)
     print(f"К загрузке {len(pairs)} лотов, качество {cfg.photo_quality}: "
@@ -88,13 +89,18 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", type=Path, help="сохранить прошедшие лоты в CSV")
     p.set_defaults(func=cmd_filter)
 
-    p = commands.add_parser("prepare", help="завести папки лотов и metadata.json по файлу-задаче")
+    p = commands.add_parser("prepare", help="завести папки лотов и metadata.json по файлу")
     p.add_argument("task", type=Path)
+    p.add_argument("--filter", action=argparse.BooleanOptionalAction, default=True,
+                   help="применять фильтры заказчика (по умолчанию да)")
+    p.add_argument("--limit", type=int, help="взять только первые N лотов")
     p.set_defaults(func=cmd_prepare)
 
     p = commands.add_parser("photos", help="скачать фото лотов из файла подписки или задачи")
     p.add_argument("file", type=Path)
     p.add_argument("--quality", choices=config.PHOTO_QUALITIES, help="по умолчанию из конфига")
+    p.add_argument("--filter", action=argparse.BooleanOptionalAction, default=True,
+                   help="применять фильтры заказчика (по умолчанию да)")
     p.add_argument("--limit", type=int, help="взять только первые N лотов")
     p.add_argument("--delay", type=float, default=0.5, help="пауза между запросами, сек")
     p.add_argument("--dry-run", action="store_true", help="только оценка объёма")

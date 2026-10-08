@@ -14,6 +14,7 @@ PHOTO_QUALITIES = ("thumbnail", "full", "high_res")
 class Config:
     year_min: int
     makes: frozenset[str]
+    vehicle_types: frozenset[str]
     damage_groups: dict[str, frozenset[str]]
     other_group: str
     photo_quality: str
@@ -51,6 +52,7 @@ def load(path: Path | None = None) -> Config:
     return Config(
         year_min=raw["filters"]["year_min"],
         makes=frozenset(m.upper() for m in raw["filters"]["makes"]),
+        vehicle_types=frozenset(t.upper() for t in raw["filters"].get("vehicle_types", ())),
         damage_groups={
             group: frozenset(v.upper() for v in values)
             for group, values in raw["damage_groups"].items()

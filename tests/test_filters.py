@@ -25,3 +25,25 @@ def test_trailer_maker_is_not_hyundai():
 def test_report_lists_rejected_damage():
     result = filters.apply(lotsearch.read(SAMPLE), config.load())
     assert "MINOR DENT/SCRATCHES" in result.report()
+
+
+def test_vehicle_type_is_checked_when_known():
+    """A listed make can still be a trailer or a boat: BMW trailers exist."""
+    from dataclasses import replace
+
+    from copart_archive import salesdata
+    cfg = config.load()
+    lots = salesdata.read(Path(__file__).parent / "fixtures" / "salesdata_sample.xlsx")
+    bmw = next(l for l in lots if l.lot == "47273516")
+    assert filters.reject_reason(bmw, cfg) is None
+    assert filters.reject_reason(replace(bmw, vehicle_type="K"), cfg) == "vehicle_type"
+
+    result = filters.apply([replace(bmw, vehicle_type="K")], cfg)
+    assert result.other_types == {"K": 1}  # reported, not silently dropped
+
+
+def test_website_export_has_no_vehicle_type_and_still_passes():
+    cfg = config.load()
+    lots = lotsearch.read(SAMPLE)
+    assert all(l.vehicle_type is None for l in lots)
+    assert len(filters.apply(lots, cfg).passed) == 5

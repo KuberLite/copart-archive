@@ -4,7 +4,7 @@ from collections import Counter
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from . import cases, layout, lotsearch, metadata, salesdata, taskfile
+from . import cases, filters, layout, lotsearch, metadata, salesdata, taskfile
 from .config import Config
 
 
@@ -40,7 +40,10 @@ def _lot_data(lot: str, task: taskfile.TaskFile, index) -> tuple[lotsearch.Lot |
     return None, None
 
 
-def read_lots(path: Path, root: Path) -> tuple[str, list[tuple[lotsearch.Lot | None, cases.Source | None, str]]]:
+Found = list[tuple[lotsearch.Lot | None, cases.Source | None, str]]
+
+
+def read_lots(path: Path, root: Path) -> tuple[str, Found]:
     """Lots of an input file: a Sales Data subscription file brings everything with
     it, a task file brings lot numbers whose data is looked up in cases/."""
     if salesdata.looks_like(path):
@@ -56,12 +59,31 @@ def read_lots(path: Path, root: Path) -> tuple[str, list[tuple[lotsearch.Lot | N
     return task.report(), found
 
 
-def prepare(path: Path, root: Path, cfg: Config) -> Prepared:
-    """Creates lot folders and metadata.json. Filters are not applied:
-    whatever the client sent is taken; damage outside groups goes to Other."""
+def select(found: Found, cfg: Config, use_filters: bool, limit: int | None) -> tuple[Found, str]:
+    """Narrows what will be prepared. A subscription file holds tens of thousands
+    of lots, so folders must not be created for all of them."""
+    notes = []
+    if use_filters:
+        known = [item for item in found if item[0] is not None]
+        unknown = [item for item in found if item[0] is None]  # reported as unplaced
+        result = filters.apply([item[0] for item in known], cfg)
+        passed = {lot.lot for lot in result.passed}
+        found = [item for item in known if item[0].lot in passed] + unknown
+        notes.append(result.report())
+    if limit is not None and len(found) > limit:
+        notes.append(f"Ограничение: берём первые {limit} из {len(found)}")
+        found = found[:limit]
+    return found, "\n".join(notes)
+
+
+def prepare(path: Path, root: Path, cfg: Config, use_filters: bool = False,
+            limit: int | None = None) -> Prepared:
+    """Creates lot folders and metadata.json for the selected lots. Without
+    filters whatever the client sent is taken; damage outside groups goes to Other."""
     header, found = read_lots(path, root)
+    found, notes = select(found, cfg, use_filters, limit)
     existing = layout.existing_lot_dirs(root)
-    result = Prepared(source=header)
+    result = Prepared(source="\n".join(p for p in (header, notes) if p))
 
     for lot, source, lot_number in found:
         if lot is None:

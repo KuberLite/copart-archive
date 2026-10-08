@@ -14,15 +14,20 @@ class FilterResult:
     # rejected by damage / make, to see whether the lists need extending
     other_damage: Counter[str] = field(default_factory=Counter)
     other_makes: Counter[str] = field(default_factory=Counter)
+    other_types: Counter[str] = field(default_factory=Counter)
 
     def report(self) -> str:
         total = len(self.passed) + sum(self.rejected.values())
         lines = [f"Всего: {total}, прошло: {len(self.passed)}"]
-        for reason, label in (("year", "году"), ("make", "марке"), ("damage", "повреждению")):
+        for reason, label in (("year", "году"), ("make", "марке"), ("damage", "повреждению"),
+                              ("vehicle_type", "типу ТС")):
             lines.append(f"  отсеяно по {label}: {self.rejected[reason]}")
         if self.other_damage:
             lines.append("Повреждения вне групп (год и марка подошли):")
             lines += [f"  {n:4}  {v}" for v, n in self.other_damage.most_common()]
+        if self.other_types:
+            lines.append("Типы ТС вне списка: " + ", ".join(
+                f"{v} ({n})" for v, n in self.other_types.most_common()))
         if self.other_makes:
             lines.append("Марки вне списка (год подошёл):")
             lines += [f"  {n:4}  {v}" for v, n in self.other_makes.most_common()]
@@ -36,6 +41,9 @@ def reject_reason(lot: Lot, cfg: Config) -> str | None:
         return "make"
     if cfg.group_for(lot.primary_damage) is None:
         return "damage"
+    # the website export has no vehicle type, so unknown passes
+    if cfg.vehicle_types and lot.vehicle_type and lot.vehicle_type.upper() not in cfg.vehicle_types:
+        return "vehicle_type"
     return None
 
 
@@ -51,4 +59,6 @@ def apply(lots: list[Lot], cfg: Config) -> FilterResult:
             result.other_makes[lot.make] += 1
         elif reason == "damage":
             result.other_damage[lot.primary_damage] += 1
+        elif reason == "vehicle_type":
+            result.other_types[lot.vehicle_type or "?"] += 1
     return result

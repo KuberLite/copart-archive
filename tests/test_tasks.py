@@ -79,3 +79,32 @@ def test_prepare_from_salesdata_needs_no_cases(tmp_path):
     data = metadata.read(jeep)
     assert data["vin_full"] and data["trim"] == "LIMITED"
     assert data["secondary_damage"] == "MECHANICAL"
+
+
+def test_filters_and_limit_run_before_folders_are_made(tmp_path):
+    cfg = config.load()
+    all_lots = tasks.prepare(SAMPLE, tmp_path / "a", cfg)
+    assert len(all_lots.dirs) == 11
+
+    filtered = tasks.prepare(SAMPLE, tmp_path / "b", cfg, use_filters=True)
+    assert len(filtered.dirs) == 5  # only the lots that pass, no folders for the rest
+    assert "прошло: 5" in filtered.report()
+
+    limited = tasks.prepare(SAMPLE, tmp_path / "c", cfg, limit=2)
+    assert len(limited.dirs) == 2
+    assert sum(1 for _ in (tmp_path / "c").rglob("metadata.json")) == 2
+    assert "первые 2 из 11" in limited.report()
+
+
+def test_filters_on_a_salesdata_file(tmp_path):
+    result = tasks.prepare(SALESDATA, tmp_path, config.load(), use_filters=True)
+    assert {d.name for d in result.dirs} == {"COPART_47273516", "COPART_51425816"}
+
+
+def test_unknown_lots_still_reported_when_filtering(tmp_path):
+    cases.ingest(SAMPLE, tmp_path)
+    task = tmp_path / "task.csv"
+    task.write_text("Lot #\n64557536\n11111111\n", encoding="utf-8")
+    result = tasks.prepare(task, tmp_path, config.load(), use_filters=True)
+    assert [d.name for d in result.dirs] == ["COPART_64557536"]
+    assert result.unplaced == ["11111111"]  # not swallowed by the filter
