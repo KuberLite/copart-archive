@@ -11,7 +11,14 @@ rsync -a --delete --exclude .venv --exclude .git --exclude archive \
 # build and run
 ssh root@HOST 'cd /opt/copart-archive/app && docker build -t copart-archive:0.1 .'
 ssh root@HOST '/opt/copart-archive/run.sh photos /input/SalesData.csv --dry-run'
+
+# a long run: detach it, the server drops idle ssh sessions
+ssh root@HOST 'DETACH=1 /opt/copart-archive/run.sh photos /input/SalesData.csv --limit 300'
+ssh root@HOST 'docker logs -f copart-archive-run'
 ```
+
+Keep `ssh -o ServerAliveInterval=15` when watching a run: this host closes
+sessions that go quiet for a minute or two.
 
 Layout on the server:
 
