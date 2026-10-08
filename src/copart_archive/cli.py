@@ -1,10 +1,11 @@
 import argparse
 import csv
 import os
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
-from . import cases, config, filters, lotsearch, tasks
+from . import cases, config, filters, lotsearch, net, photos, tasks
 
 DEFAULT_ROOT = Path(os.environ.get("COPART_ARCHIVE_ROOT", "archive"))
 
@@ -30,6 +31,35 @@ def cmd_filter(args: argparse.Namespace) -> int:
 
 def cmd_prepare(args: argparse.Namespace) -> int:
     result = tasks.prepare(args.task, args.root, config.load())
+    print(result.report())
+    return 0
+
+
+def cmd_photos(args: argparse.Namespace) -> int:
+    cfg = config.load()
+    if args.quality:
+        cfg = replace(cfg, photo_quality=args.quality)
+    prepared = tasks.prepare(args.file, args.root, cfg)
+    print(prepared.report())
+
+    pairs = list(zip(prepared.dirs, prepared.lots))[:args.limit]
+    estimate = photos.estimate_bytes(len(pairs), cfg.photo_quality)
+    free = photos.free_bytes(args.root)
+    print(f"К загрузке {len(pairs)} лотов, качество {cfg.photo_quality}: "
+          f"≈{photos.human(estimate)}, свободно {photos.human(free)}")
+    if args.dry_run:
+        return 0
+    warning = photos.space_warning(args.root, len(pairs), cfg.photo_quality)
+    if warning:
+        print(warning)
+        return 1
+
+    http = net.Http(delay=args.delay)
+    result = photos.Result()
+    for done, (lot_dir, lot) in enumerate(pairs, start=1):
+        result.lots.append(photos.sync_lot(lot_dir, lot, cfg, http))
+        if done % 25 == 0 or done == len(pairs):
+            print(f"  {done}/{len(pairs)} лотов, {photos.human(result.bytes_saved)}")
     print(result.report())
     return 0
 
@@ -61,6 +91,14 @@ def main(argv: list[str] | None = None) -> int:
     p = commands.add_parser("prepare", help="завести папки лотов и metadata.json по файлу-задаче")
     p.add_argument("task", type=Path)
     p.set_defaults(func=cmd_prepare)
+
+    p = commands.add_parser("photos", help="скачать фото лотов из файла подписки или задачи")
+    p.add_argument("file", type=Path)
+    p.add_argument("--quality", choices=config.PHOTO_QUALITIES, help="по умолчанию из конфига")
+    p.add_argument("--limit", type=int, help="взять только первые N лотов")
+    p.add_argument("--delay", type=float, default=0.5, help="пауза между запросами, сек")
+    p.add_argument("--dry-run", action="store_true", help="только оценка объёма")
+    p.set_defaults(func=cmd_photos)
 
     args = parser.parse_args(argv)
     return args.func(args)
