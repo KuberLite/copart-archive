@@ -53,3 +53,7 @@ def test_falls_back_to_the_repo_copy(tmp_path, monkeypatch):
     monkeypatch.delenv("COPART_ARCHIVE_CONFIG", raising=False)
     monkeypatch.chdir(tmp_path)
     assert config.find() == config.REPO_PATH
+
+
+def test_vehicle_types_empty_means_everything():
+    assert config.load().vehicle_types == frozenset()

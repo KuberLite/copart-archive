@@ -21,7 +21,8 @@ class FilterResult:
         lines = [f"Всего: {total}, прошло: {len(self.passed)}"]
         for reason, label in (("year", "году"), ("make", "марке"), ("damage", "повреждению"),
                               ("vehicle_type", "типу ТС")):
-            lines.append(f"  отсеяно по {label}: {self.rejected[reason]}")
+            if self.rejected[reason]:
+                lines.append(f"  отсеяно по {label}: {self.rejected[reason]}")
         if self.other_damage:
             lines.append("Повреждения вне групп (год и марка подошли):")
             lines += [f"  {n:4}  {v}" for v, n in self.other_damage.most_common()]

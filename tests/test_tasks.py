@@ -97,6 +97,7 @@ def test_filters_and_limit_run_before_folders_are_made(tmp_path):
 
 
 def test_filters_on_a_salesdata_file(tmp_path):
+    """Vehicle type is not filtered: the client takes his file as it is."""
     result = tasks.prepare(SALESDATA, tmp_path, config.load(), use_filters=True)
     assert {d.name for d in result.dirs} == {"COPART_47273516", "COPART_51425816"}
 

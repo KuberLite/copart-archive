@@ -2,9 +2,10 @@
 
 [filters]
 year_min = 2015  # no upper bound
-# Vehicle Type from the Sales Data file: V is a car, K/L/R/C/U are trailers,
-# boats and the like. Empty list means "take everything".
-vehicle_types = ["V"]
+# Vehicle Type from the Sales Data file (V is a car, K a van or truck, L a trailer).
+# The client takes the file as it is, so nothing is dropped by type; filling the
+# list would switch the filter on.
+vehicle_types = []
 makes = [
   "BMW", "MERCEDES-BENZ", "AUDI", "PORSCHE", "LAND ROVER", "TESLA", "LEXUS",
   "VOLVO", "CADILLAC", "INFINITI", "ACURA", "JAGUAR", "TOYOTA", "HONDA",
