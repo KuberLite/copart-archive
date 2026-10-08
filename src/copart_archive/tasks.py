@@ -19,7 +19,8 @@ class Prepared:
     unplaced: list[str] = field(default_factory=list)  # no make/damage data at all
 
     def report(self) -> str:
-        lines = [self.source, f"Папок лотов: {len(self.dirs)}, новых: {self.created}"]
+        lines = ([self.source] if self.source else []) + [
+            f"Папок лотов: {len(self.dirs)}, новых: {self.created}"]
         lines += [f"  {n:5}  {g}" for g, n in sorted(self.by_group.items())]
         if self.not_in_cases:
             lines.append(f"Нет в cases/, данные взяты из файла: {len(self.not_in_cases)}")
@@ -76,14 +77,11 @@ def select(found: Found, cfg: Config, use_filters: bool, limit: int | None) -> t
     return found, "\n".join(notes)
 
 
-def prepare(path: Path, root: Path, cfg: Config, use_filters: bool = False,
-            limit: int | None = None) -> Prepared:
-    """Creates lot folders and metadata.json for the selected lots. Without
-    filters whatever the client sent is taken; damage outside groups goes to Other."""
-    header, found = read_lots(path, root)
-    found, notes = select(found, cfg, use_filters, limit)
+def prepare_lots(found: Found, root: Path, cfg: Config, source: str = "") -> Prepared:
+    """Creates lot folders and metadata.json. Writes to disk, so an estimate must
+    not call it; damage outside the groups goes to Other."""
     existing = layout.existing_lot_dirs(root)
-    result = Prepared(source="\n".join(p for p in (header, notes) if p))
+    result = Prepared(source=source)
 
     for lot, source, lot_number in found:
         if lot is None:
@@ -101,3 +99,10 @@ def prepare(path: Path, root: Path, cfg: Config, use_filters: bool = False,
         result.lots.append(lot)
         result.by_group[group] += 1
     return result
+
+
+def prepare(path: Path, root: Path, cfg: Config, use_filters: bool = False,
+            limit: int | None = None) -> Prepared:
+    header, found = read_lots(path, root)
+    found, notes = select(found, cfg, use_filters, limit)
+    return prepare_lots(found, root, cfg, "\n".join(p for p in (header, notes) if p))

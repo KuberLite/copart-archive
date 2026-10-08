@@ -40,20 +40,26 @@ def cmd_photos(args: argparse.Namespace) -> int:
     cfg = config.load()
     if args.quality:
         cfg = replace(cfg, photo_quality=args.quality)
-    prepared = tasks.prepare(args.file, args.root, cfg, use_filters=args.filter, limit=args.limit)
-    print(prepared.report())
+    header, found = tasks.read_lots(args.file, args.root)
+    found, notes = tasks.select(found, cfg, args.filter, args.limit)
+    for line in (header, notes):
+        if line:
+            print(line)
 
-    pairs = list(zip(prepared.dirs, prepared.lots))
-    estimate = photos.estimate_bytes(len(pairs), cfg.photo_quality)
-    free = photos.free_bytes(args.root)
-    print(f"К загрузке {len(pairs)} лотов, качество {cfg.photo_quality}: "
-          f"≈{photos.human(estimate)}, свободно {photos.human(free)}")
-    if args.dry_run:
+    count = sum(1 for lot, _, _ in found if lot is not None)
+    print(f"К загрузке {count} лотов, качество {cfg.photo_quality}: "
+          f"≈{photos.human(photos.estimate_bytes(count, cfg.photo_quality))}, "
+          f"свободно {photos.human(photos.free_bytes(args.root))}")
+    if args.dry_run:  # оценка ничего не создаёт на диске
         return 0
-    warning = photos.space_warning(args.root, len(pairs), cfg.photo_quality)
+    warning = photos.space_warning(args.root, count, cfg.photo_quality)
     if warning:
         print(warning)
         return 1
+
+    prepared = tasks.prepare_lots(found, args.root, cfg)
+    print(prepared.report())
+    pairs = list(zip(prepared.dirs, prepared.lots))
 
     http = net.Http(delay=args.delay)
     result = photos.Result()
