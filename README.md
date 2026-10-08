@@ -42,6 +42,9 @@ A website CSV export works too, through the older route:
 .venv/bin/copart-archive prepare task.csv
 ```
 
+Settings are taken from `COPART_ARCHIVE_CONFIG`, else `./config/archive.toml`.
+Deployment notes are in [deploy/README.md](deploy/README.md).
+
 Photos live only while the lot is in Copart's inventory — after the sale the
 image API answers 404, and such lots are marked `photos_status: gone`.
 
