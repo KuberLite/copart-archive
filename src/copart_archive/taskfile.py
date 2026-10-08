@@ -1,19 +1,15 @@
 """Task file sent by the client: which lots need photos.
 
-The client prepares it in Excel, so the format is loose: xlsx or csv
-(possibly re-saved by Russian Excel with ';' and cp1251), extra sheets,
+The client prepares it in Excel, so the format is loose: extra sheets,
 duplicates, deleted columns. Only a lot number is required, taken from
 "Lot #" or parsed from "Lot URL".
 """
 
-import csv
-import io
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
 
-import openpyxl
+from .tabular import FormatError, read_tables
 
 MAIN_SHEET = "ALL_LOTS"
 LOT_COLUMN = "lot #"
@@ -21,9 +17,7 @@ URL_COLUMN = "lot url"
 _LOT_RE = re.compile(r"\d{6,9}")
 _URL_RE = re.compile(r"/lot/(\d{6,9})")
 
-
-class TaskFileError(ValueError):
-    pass
+TaskFileError = FormatError
 
 
 @dataclass
@@ -54,49 +48,6 @@ class TaskFile:
         return "\n".join(lines)
 
 
-def _cell(value) -> str:
-    """Excel cell to the text Copart would have written in the CSV."""
-    if value is None:
-        return ""
-    if isinstance(value, float) and value.is_integer():
-        return str(int(value))
-    if isinstance(value, datetime):
-        return value.strftime("%m/%d/%Y %I:%M %p").lower()
-    return str(value).strip()
-
-
-def _read_xlsx(path: Path) -> list[tuple[str, list[list[str]]]]:
-    """ALL_LOTS if present; otherwise every sheet, since the client may keep
-    only the per-make sheets he wants. Sheets without a lot column (statistics)
-    are dropped later."""
-    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
-    try:
-        sheets = [wb[MAIN_SHEET]] if MAIN_SHEET in wb.sheetnames else wb.worksheets
-        return [(ws.title, [[_cell(v) for v in row] for row in ws.iter_rows(values_only=True)])
-                for ws in sheets]
-    finally:
-        wb.close()
-
-
-def _decode(path: Path) -> str:
-    data = path.read_bytes()
-    # Excel's "Unicode Text" is UTF-16 with a BOM
-    encodings = ("utf-16",) if data[:2] in (b"\xff\xfe", b"\xfe\xff") else ("utf-8-sig", "cp1251")
-    for encoding in encodings:
-        try:
-            return data.decode(encoding)
-        except UnicodeDecodeError:
-            continue
-    raise TaskFileError(f"{path.name}: не удалось определить кодировку, сохраните как CSV UTF-8")
-
-
-def _read_csv(path: Path) -> list[list[str]]:
-    text = _decode(path)
-    header = text.splitlines()[0] if text else ""
-    delimiter = max(",;\t", key=header.count)
-    return [[c.strip() for c in row] for row in csv.reader(io.StringIO(text), delimiter=delimiter)]
-
-
 def _lot_number(lot_value: str, url_value: str) -> str | None:
     if _LOT_RE.fullmatch(lot_value):
         return lot_value
@@ -113,12 +64,7 @@ def _columns(header: list[str]) -> tuple[int | None, int | None] | None:
 
 
 def read(path: Path) -> TaskFile:
-    if path.suffix.lower() in (".xlsx", ".xlsm"):
-        tables = _read_xlsx(path)
-    elif path.suffix.lower() in (".csv", ".txt"):
-        tables = [(None, _read_csv(path))]
-    else:
-        raise TaskFileError(f"{path.name}: нужен .xlsx или .csv")
+    tables = read_tables(path, MAIN_SHEET)
 
     task = TaskFile(path=path)
     has_lot_column = False
