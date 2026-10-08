@@ -1,8 +1,11 @@
+import os
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-DEFAULT_PATH = Path(__file__).resolve().parents[2] / "config" / "archive.toml"
+# in a container the package is installed, so the repo layout is not there:
+# COPART_ARCHIVE_CONFIG points at the file then
+REPO_PATH = Path(__file__).resolve().parents[2] / "config" / "archive.toml"
 PHOTO_QUALITIES = ("thumbnail", "full", "high_res")
 
 
@@ -23,7 +26,10 @@ class Config:
         return None
 
 
-def load(path: Path = DEFAULT_PATH) -> Config:
+def load(path: Path | None = None) -> Config:
+    path = path or Path(os.environ.get("COPART_ARCHIVE_CONFIG") or REPO_PATH)
+    if not path.exists():
+        raise FileNotFoundError(f"нет файла настроек {path}, задайте COPART_ARCHIVE_CONFIG")
     with open(path, "rb") as f:
         raw = tomllib.load(f)
 
