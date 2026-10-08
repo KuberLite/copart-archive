@@ -3,7 +3,7 @@
 Photo archive of Copart lots.
 
 - `archive/cases/COPART/<date>/` — raw auction tables (never modified)
-- `archive/photos/<DAMAGE>/<MAKE>/<YEAR>/<MODEL>/COPART_<lot>/` — photos + `metadata.json`
+- `archive/photos/<DAMAGE>/<MAKE>/<YEAR>/<MODEL>/COPART_<lot>_<VIN>/` — photos + `metadata.json` (no VIN suffix when the VIN is empty or masked)
 
 ## Setup
 

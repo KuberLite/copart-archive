@@ -1,4 +1,4 @@
-"""Photo tree: photos/<GROUP>/<MAKE>/<YEAR>/<MODEL>/COPART_<lot>/.
+"""Photo tree: photos/<GROUP>/<MAKE>/<YEAR>/<MODEL>/COPART_<lot>_<VIN>/.
 
 The archive is browsed from Windows over a network share, so names are made
 Windows-safe: no <>:"/\\|?*, no trailing dot/space, no reserved names.
@@ -13,6 +13,8 @@ from .lotsearch import Lot
 
 PHOTOS = "photos"
 LOT_PREFIX = "COPART_"
+_LOT_DIR_RE = re.compile(rf"{LOT_PREFIX}(\d+)(?:_[A-Z0-9]+)?$")
+_VIN_RE = re.compile(r"[A-Z0-9]+")
 _FORBIDDEN = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 _RESERVED = {"CON", "PRN", "AUX", "NUL"} | {f"{p}{i}" for p in ("COM", "LPT") for i in range(1, 10)}
 
@@ -31,10 +33,20 @@ def damage_group(lot: Lot, cfg: Config) -> str:
     return cfg.group_for(lot.primary_damage) or cfg.other_group
 
 
+def folder_name(lot: Lot) -> str:
+    """COPART_<lot>_<VIN>. Without a usable VIN — empty, or masked with asterisks
+    as in the website export — just COPART_<lot>: an asterisk is not allowed in a
+    Windows name, and a placeholder would pass for a real VIN."""
+    vin = lot.vin.strip().upper()
+    if vin and _VIN_RE.fullmatch(vin):
+        return f"{LOT_PREFIX}{lot.lot}_{vin}"
+    return f"{LOT_PREFIX}{lot.lot}"
+
+
 def lot_dir(root: Path, lot: Lot, cfg: Config) -> Path:
     year = str(lot.year) if lot.year else "UNKNOWN"
     return (root / PHOTOS / damage_group(lot, cfg) / safe_name(lot.make)
-            / year / safe_name(lot.model) / f"{LOT_PREFIX}{lot.lot}")
+            / year / safe_name(lot.model) / folder_name(lot))
 
 
 def existing_lot_dirs(root: Path) -> dict[str, Path]:
@@ -43,5 +55,9 @@ def existing_lot_dirs(root: Path) -> dict[str, Path]:
     base = root / PHOTOS
     if not base.exists():
         return {}
-    return {p.name.removeprefix(LOT_PREFIX): p
-            for p in base.glob(f"*/*/*/*/{LOT_PREFIX}*") if p.is_dir()}
+    found = {}
+    for p in base.glob(f"*/*/*/*/{LOT_PREFIX}*"):
+        m = _LOT_DIR_RE.fullmatch(p.name)
+        if m and p.is_dir():
+            found[m[1]] = p
+    return found

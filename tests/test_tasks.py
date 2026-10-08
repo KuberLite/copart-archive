@@ -74,7 +74,7 @@ def test_prepare_from_salesdata_needs_no_cases(tmp_path):
     assert len(result.dirs) == 4
     assert result.not_in_cases == [] and result.unplaced == []
     assert "Sales Data" in result.report()
-    jeep = tmp_path / "photos/Side/JEEP/2015/GRAND CHEROKEE/COPART_51425816"
+    jeep = tmp_path / "photos/Side/JEEP/2015/GRAND CHEROKEE/COPART_51425816_1C4RJEBM3FC000004"
     assert jeep in result.dirs
     data = metadata.read(jeep)
     assert data["vin_full"] and data["trim"] == "LIMITED"
@@ -99,7 +99,8 @@ def test_filters_and_limit_run_before_folders_are_made(tmp_path):
 def test_filters_on_a_salesdata_file(tmp_path):
     """Vehicle type is not filtered: the client takes his file as it is."""
     result = tasks.prepare(SALESDATA, tmp_path, config.load(), use_filters=True)
-    assert {d.name for d in result.dirs} == {"COPART_47273516", "COPART_51425816"}
+    assert {d.name for d in result.dirs} == {"COPART_47273516_WBAJA5C50JWA00003",
+                                             "COPART_51425816_1C4RJEBM3FC000004"}
 
 
 def test_unknown_lots_still_reported_when_filtering(tmp_path):
@@ -109,3 +110,29 @@ def test_unknown_lots_still_reported_when_filtering(tmp_path):
     result = tasks.prepare(task, tmp_path, config.load(), use_filters=True)
     assert [d.name for d in result.dirs] == ["COPART_64557536"]
     assert result.unplaced == ["11111111"]  # not swallowed by the filter
+
+
+def test_old_folder_gets_the_vin_added(tmp_path):
+    cfg = config.load()
+    old = tmp_path / "photos/Side/JEEP/2015/GRAND CHEROKEE/COPART_51425816"
+    old.mkdir(parents=True)
+    (old / "01.jpg").write_bytes(b"photo")
+    result = tasks.prepare(SALESDATA, tmp_path, cfg)
+    new = old.with_name("COPART_51425816_1C4RJEBM3FC000004")
+    assert new in result.dirs and not old.exists()
+    assert (new / "01.jpg").read_bytes() == b"photo"  # the photos moved with it
+    assert result.renamed == 1 and "добавлен VIN в имя: 1" in result.report()
+
+
+def test_a_masked_vin_never_takes_the_vin_out_of_a_name(tmp_path):
+    from dataclasses import replace
+
+    from copart_archive import lotsearch
+    cfg = config.load()
+    tasks.prepare(SALESDATA, tmp_path, cfg)
+    named = tmp_path / "photos/Side/JEEP/2015/GRAND CHEROKEE/COPART_51425816_1C4RJEBM3FC000004"
+    assert named.exists()
+    # the same lot later seen in a website export, VIN masked
+    masked = replace(lotsearch.read(SAMPLE)[0], lot="51425816", vin="1C4RJEBM3FC******")
+    result = tasks.prepare_lots([(masked, None, "51425816")], tmp_path, cfg)
+    assert result.dirs == [named] and result.renamed == 0
