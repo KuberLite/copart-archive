@@ -38,3 +38,21 @@ def test_lot_index(tmp_path):
     source, lot = index["64557536"]
     assert source == cases.Source(Path("cases/COPART/2026-09-18/LotSearchresults_001.csv"), 2)
     assert lot.make == "INFINITI"
+
+
+def test_build_from_salesdata_has_trim_and_full_vin():
+    from copart_archive import salesdata
+    lot = next(l for l in salesdata.read(
+        Path(__file__).parent / "fixtures" / "salesdata_sample.xlsx") if l.lot == "51425816")
+    data = metadata.build(lot, "Side", None)
+    assert data["trim"] == "LIMITED"
+    assert data["secondary_damage"] == "MECHANICAL"
+    assert data["vin_full"] is True
+    assert data["data_source"] == "salesdata"
+    assert data["runs_drives"] and data["title_type"]
+
+
+def test_build_from_lotsearch_leaves_extras_empty():
+    data = metadata.build(qx60(), "Front_End", None)
+    assert data["trim"] is None and data["secondary_damage"] is None
+    assert data["vin_full"] is False and data["data_source"] == "lotsearch"

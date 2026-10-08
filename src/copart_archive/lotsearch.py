@@ -18,6 +18,7 @@ TZ_OFFSETS = {
     "MSK": 3, "UTC": 0, "GMT": 0,
     "EST": -5, "EDT": -4, "CST": -6, "CDT": -5,
     "MST": -7, "MDT": -6, "PST": -8, "PDT": -7,
+    "AKST": -9, "AKDT": -8, "HST": -10, "HDT": -9,
 }
 
 
@@ -53,10 +54,31 @@ class Lot:
     cylinders: str
     row: int  # line number in the file; the header is 1
     raw: dict[str, str]
+    # filled in from the Sales Data subscription; the CSV export has none of these
+    source: str = "lotsearch"
+    trim: str | None = None
+    secondary_damage: str | None = None
+    vehicle_type: str | None = None
+    body_style: str | None = None
+    color: str | None = None
+    drive: str | None = None
+    transmission: str | None = None
+    fuel: str | None = None
+    keys: str | None = None
+    runs_drives: str | None = None
+    title_type: str | None = None
+    lot_cond_code: str | None = None
+    repair_cost_usd: int | None = None
+    seller: str | None = None
+    image_api_url: str | None = None
 
     @property
     def vin_masked(self) -> bool:
         return "*" in self.vin
+
+    @property
+    def vin_full(self) -> bool:
+        return len(self.vin) == 17 and not self.vin_masked
 
 
 def _int(text: str) -> int | None:

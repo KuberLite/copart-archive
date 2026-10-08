@@ -17,13 +17,14 @@ def build(lot: Lot, group: str, source: Source | None) -> dict:
         "schema_version": SCHEMA_VERSION,
         "auction": AUCTION,
         "lot": lot.lot,
-        "vin": lot.vin,  # Copart masks the tail with asterisks; kept as is
+        "vin": lot.vin,  # masked with asterisks in the website export, full in Sales Data
+        "vin_full": lot.vin_full,
         "year": lot.year,
         "make": lot.make,
         "model": lot.model,
-        "trim": None,  # not in the CSV export
+        "trim": lot.trim,
         "primary_damage": lot.primary_damage,
-        "secondary_damage": None,  # not in the CSV export
+        "secondary_damage": lot.secondary_damage,
         "damage_group": group,
         "sale_date": lot.sale_date.isoformat() if lot.sale_date else None,
         "sale_datetime": lot.sale_datetime.isoformat() if lot.sale_datetime else None,
@@ -37,6 +38,19 @@ def build(lot: Lot, group: str, source: Source | None) -> dict:
         "engine": lot.engine,
         "cylinders": lot.cylinders,
         "lot_url": lot.lot_url,
+        "vehicle_type": lot.vehicle_type,
+        "body_style": lot.body_style,
+        "color": lot.color,
+        "drive": lot.drive,
+        "transmission": lot.transmission,
+        "fuel": lot.fuel,
+        "keys": lot.keys,
+        "runs_drives": lot.runs_drives,
+        "title_type": lot.title_type,
+        "lot_cond_code": lot.lot_cond_code,
+        "repair_cost_usd": lot.repair_cost_usd,
+        "seller": lot.seller,
+        "data_source": lot.source,
         "source": {"file": source.file.as_posix(), "row": source.row} if source else None,
         "source_row": lot.raw,
     }
