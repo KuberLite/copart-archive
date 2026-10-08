@@ -90,3 +90,8 @@ def test_hawaii_time_zone_is_known():
 @pytest.mark.parametrize("day", ["0", "", "2026-10-02", "202610"])
 def test_unparseable_day(day):
     assert salesdata.parse_sale_date(day, "1200", "PDT") == (None, None)
+
+
+def test_looks_like_distinguishes_files():
+    assert salesdata.looks_like(SAMPLE)
+    assert not salesdata.looks_like(Path(__file__).parent / "fixtures" / "lotsearch_sample.csv")

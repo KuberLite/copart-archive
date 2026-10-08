@@ -1,3 +1,4 @@
+import csv
 from pathlib import Path
 
 from copart_archive import cases, config, metadata, tasks
@@ -51,7 +52,6 @@ def test_prepare_from_lot_numbers_only(tmp_path):
 
 
 def test_lot_number_from_url_when_lot_column_blank(tmp_path):
-    import csv
     with open(SAMPLE, encoding="utf-8-sig", newline="") as f:
         rows = list(csv.DictReader(f))
     for row in rows[:2]:
@@ -64,3 +64,18 @@ def test_lot_number_from_url_when_lot_column_blank(tmp_path):
     result = tasks.prepare(task, tmp_path, config.load())
     assert [d.name for d in result.dirs] == ["COPART_64557536", "COPART_68979086"]
     assert metadata.read(result.dirs[0])["lot"] == "64557536"
+
+
+SALESDATA = Path(__file__).parent / "fixtures" / "salesdata_sample.xlsx"
+
+
+def test_prepare_from_salesdata_needs_no_cases(tmp_path):
+    result = tasks.prepare(SALESDATA, tmp_path, config.load())
+    assert len(result.dirs) == 4
+    assert result.not_in_cases == [] and result.unplaced == []
+    assert "Sales Data" in result.report()
+    jeep = tmp_path / "photos/Side/JEEP/2015/GRAND CHEROKEE/COPART_51425816"
+    assert jeep in result.dirs
+    data = metadata.read(jeep)
+    assert data["vin_full"] and data["trim"] == "LIMITED"
+    assert data["secondary_damage"] == "MECHANICAL"

@@ -61,6 +61,22 @@ def read_csv(path: Path) -> list[list[str]]:
     return [[c.strip() for c in row] for row in csv.reader(io.StringIO(text), delimiter=delimiter)]
 
 
+def read_headers(path: Path) -> list[tuple[str | None, list[str]]]:
+    """Only the first row of each table — enough to tell one file format from another
+    without parsing a workbook of a couple of hundred sheets."""
+    if path.suffix.lower() in XLSX_SUFFIXES:
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        try:
+            return [(ws.title, [cell(v) for v in next(ws.iter_rows(max_row=1, values_only=True), ())])
+                    for ws in wb.worksheets]
+        finally:
+            wb.close()
+    if path.suffix.lower() in CSV_SUFFIXES:
+        rows = read_csv(path)
+        return [(None, rows[0] if rows else [])]
+    raise FormatError(f"{path.name}: нужен .xlsx или .csv")
+
+
 def read_tables(path: Path, sheet: str | None = None) -> list[tuple[str | None, list[list[str]]]]:
     """Tables of a file: one per sheet for xlsx, a single one for csv."""
     if path.suffix.lower() in XLSX_SUFFIXES:

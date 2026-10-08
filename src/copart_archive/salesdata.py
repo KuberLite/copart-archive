@@ -10,7 +10,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from .lotsearch import TZ_OFFSETS, Lot, parse_sale_name
-from .tabular import FormatError, read_tables
+from .tabular import FormatError, read_headers, read_tables
 
 REQUIRED_COLUMNS = ("Lot number", "VIN", "Year", "Make", "Damage Description")
 ODOMETER_BRANDS = {"A": "ACTUAL", "N": "NOT ACTUAL", "E": "EXEMPT"}
@@ -98,6 +98,13 @@ def from_row(row: dict[str, str], line: int) -> Lot:
         seller=get("Seller Name") or None,
         image_api_url=get("Image URL") or None,
     )
+
+
+def looks_like(path: Path) -> bool:
+    """Is this a subscription file? Checked by headers only, so a task workbook
+    with hundreds of sheets is not parsed in full just to find out."""
+    return any(all(c in [h.strip() for h in header] for c in REQUIRED_COLUMNS)
+               for _, header in read_headers(path))
 
 
 def read(path: Path) -> list[Lot]:
