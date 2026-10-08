@@ -17,7 +17,7 @@ from pathlib import Path, PurePosixPath
 from . import config, jobs, layout, net, photos, uploads
 from .tabular import FormatError
 
-STATUS, STOP = "Статус", "Остановить"
+STATUS, STOP, RULES = "Статус", "Остановить", "Правила"
 MAX_FILE = 20 * 1024**2  # what the Telegram Bot API lets a bot download
 PROGRESS_EVERY = 30.0  # seconds between progress message edits
 
@@ -57,10 +57,31 @@ def too_big_text(size: int) -> str:
             "Сожмите его в zip — таблица ужимается в несколько раз.")
 
 
+QUALITY_NAMES = {"thumbnail": "превью", "full": "обычное", "high_res": "HD"}
+
+
 def help_text() -> str:
     return ("Пришлите файл выгрузки Copart (.xlsx, .csv или .zip) — загрузка фото начнётся сразу.\n"
             f"«{STATUS}» — что идёт сейчас и сколько места. «{STOP}» — прервать загрузку, "
-            "скачанное останется, повторная отправка того же файла докачает остальное.")
+            "скачанное останется, повторная отправка того же файла докачает остальное. "
+            f"«{RULES}» — какие лоты берутся из файла.")
+
+
+def rules_text(cfg: config.Config) -> str:
+    """Built from the config, so it always says what the bot actually does."""
+    groups = "\n".join(f"  {group} — {', '.join(sorted(values))}"
+                       for group, values in cfg.damage_groups.items())
+    types = (", ".join(sorted(cfg.vehicle_types)) if cfg.vehicle_types
+             else "не фильтруется, берутся все")
+    return (
+        "Из файла берутся лоты, которые проходят все условия:\n\n"
+        f"• Год выпуска: {cfg.year_min} и новее\n"
+        f"• Марка ({len(cfg.makes)}): {', '.join(sorted(cfg.makes))}\n"
+        f"• Основное повреждение (primary) — одна из групп:\n{groups}\n"
+        f"• Тип ТС: {types}\n\n"
+        "Остальные лоты пропускаются, в ответе на файл видно, сколько и почему.\n\n"
+        f"Фото: качество {QUALITY_NAMES.get(cfg.photo_quality, cfg.photo_quality)}, все снимки лота.\n"
+        "Папки: Группа / Марка / Год / Модель / COPART_<лот>_<VIN>")
 
 
 def describe_state(state: jobs.State) -> str:
@@ -134,7 +155,8 @@ def build(settings: Settings, cfg: config.Config):
     # the other must not both pass the check while the first is still downloading
     starting = asyncio.Lock()
     keyboard = ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text=STATUS), KeyboardButton(text=STOP)]],
+        keyboard=[[KeyboardButton(text=STATUS), KeyboardButton(text=STOP)],
+                  [KeyboardButton(text=RULES)]],
         resize_keyboard=True, is_persistent=True)
 
     @dp.message(~F.from_user.id.in_(settings.allowed))
@@ -151,6 +173,10 @@ def build(settings: Settings, cfg: config.Config):
     async def status(message: Message) -> None:
         text = await asyncio.to_thread(status_text, runner.current(), settings.root)
         await message.answer(text, reply_markup=keyboard)
+
+    @dp.message(F.text == RULES)
+    async def rules(message: Message) -> None:
+        await message.answer(rules_text(cfg), reply_markup=keyboard)
 
     @dp.message(F.text == STOP)
     async def stop(message: Message) -> None:

@@ -257,3 +257,25 @@ def test_telegram_refusing_the_file(tmp_path, monkeypatch):
     monkeypatch.setattr(telegram, "download", refuse)
     asyncio.run(dp.feed_update(telegram, document_update(100, "big.xlsx", 0)))
     assert any("Telegram не отдал файл" in t for t in telegram.session.sent)
+
+
+def test_rules_follow_the_config():
+    from dataclasses import replace
+    cfg = config.load()
+    text = bot.rules_text(cfg)
+    assert "2015 и новее" in text
+    assert "Марка (21)" in text and "MERCEDES-BENZ" in text
+    assert "Flood — WATER/FLOOD" in text
+    assert "не фильтруется" in text and "обычное" in text
+    changed = bot.rules_text(replace(cfg, year_min=2018, vehicle_types=frozenset({"V"}),
+                                     photo_quality="high_res"))
+    assert "2018 и новее" in changed and "Тип ТС: V" in changed and "HD" in changed
+
+
+def test_rules_button(tmp_path):
+    [reply] = run_dispatch(tmp_path, 100, bot.RULES)
+    assert "Год выпуска" in reply
+
+
+def test_stranger_does_not_see_the_rules(tmp_path):
+    assert run_dispatch(tmp_path, 999, bot.RULES) == [bot.access_denied_text(999)]
