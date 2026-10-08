@@ -20,7 +20,7 @@ and a file downloads fine.
 
 - **Windows** — WinSCP or FileZilla; for a drive letter see below.
 - **Linux** — the file manager opens `sftp://copart@grahovskiy.com/archive`, or `sshfs`.
-- **macOS** — Finder has no SFTP; Cyberduck or `sshfs`.
+- **macOS** — Finder has no SFTP; mount with rclone, see below.
 - **CLI** — `sftp -i key copart@grahovskiy.com`, `rsync -e ssh`, `scp`.
 
 ## A network drive on Windows
@@ -37,6 +37,29 @@ Windows cannot mount SFTP by itself; WinFsp + SSHFS-Win (both free) add that.
    content, so an ed25519 key works under that name.
 
 The drive is read-only: copying from it works, writing to it is refused.
+
+## Mounting on macOS
+
+`rclone nfsmount` serves the archive over the NFS client built into macOS, so
+there is no macFUSE, no kernel extension and no reboot. Checked on macOS 26
+(Apple Silicon): mounts without sudo, reads files, writes are refused.
+
+```bash
+brew install rclone
+rclone config create copart sftp host grahovskiy.com user copart \
+  key_file "$HOME/.ssh/id_rsa" known_hosts_file "$HOME/.ssh/known_hosts" \
+  host_key_algorithms ssh-ed25519 shell_type none
+mkdir -p ~/copart-archive
+rclone nfsmount copart:/archive ~/copart-archive --read-only \
+  --vfs-cache-mode full --vfs-cache-max-size 2G --volname "Copart archive" --daemon
+```
+
+Unmount with `umount ~/copart-archive`; after a reboot run the last command again.
+
+`host_key_algorithms ssh-ed25519` matters: `known_hosts` holds the server's
+ed25519 key, and without it rclone offers another key type and fails with
+"knownhosts: key mismatch". Do not switch the check off — it is what stops a
+fake server from taking the connection.
 
 Alternatives: `rclone mount` with WinFsp (a command that has to keep running),
 or paid tools — Mountain Duck (also gives a drive in macOS Finder), SFTP Drive.
