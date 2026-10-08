@@ -5,7 +5,7 @@ from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
-from . import cases, config, filters, lotsearch, net, photos, tasks
+from . import cases, config, filters, jobs, lotsearch, net, tasks
 
 DEFAULT_ROOT = Path(os.environ.get("COPART_ARCHIVE_ROOT", "archive"))
 
@@ -40,35 +40,20 @@ def cmd_photos(args: argparse.Namespace) -> int:
     cfg = config.load()
     if args.quality:
         cfg = replace(cfg, photo_quality=args.quality)
-    header, found = tasks.read_lots(args.file, args.root)
-    found, notes = tasks.select(found, cfg, args.filter, args.limit)
-    for line in (header, notes):
-        if line:
-            print(line)
-
-    count = sum(1 for lot, _, _ in found if lot is not None)
-    print(f"К загрузке {count} лотов, качество {cfg.photo_quality}: "
-          f"≈{photos.human(photos.estimate_bytes(count, cfg.photo_quality))}, "
-          f"свободно {photos.human(photos.free_bytes(args.root))}")
+    job_plan = jobs.plan(args.file, args.root, cfg, args.filter, args.limit)
+    print(job_plan.describe(cfg.photo_quality))
     if args.dry_run:  # оценка ничего не создаёт на диске
         return 0
-    warning = photos.space_warning(args.root, count, cfg.photo_quality)
-    if warning:
-        print(warning)
+    if job_plan.warning:
         return 1
 
-    prepared = tasks.prepare_lots(found, args.root, cfg)
-    print(prepared.report())
-    pairs = list(zip(prepared.dirs, prepared.lots))
+    def progress(state: jobs.State) -> None:
+        if state.done % 25 == 0 or state.done == state.total:
+            print(f"  {state.progress()}")
 
-    http = net.Http(delay=args.delay)
-    result = photos.Result()
-    for done, (lot_dir, lot) in enumerate(pairs, start=1):
-        result.lots.append(photos.sync_lot(lot_dir, lot, cfg, http))
-        if done % 25 == 0 or done == len(pairs):
-            print(f"  {done}/{len(pairs)} лотов, {photos.human(result.bytes_saved)}")
-    print(result.report())
-    return 0
+    state = jobs.Job(job_plan, args.root, cfg, net.Http(delay=args.delay), args.file.name).run(progress)
+    print(state.summary or state.error)
+    return 0 if state.status == jobs.DONE else 1
 
 
 def write_lots(path: Path, lots: list[lotsearch.Lot]) -> None:

@@ -32,7 +32,8 @@ def test_photos_dry_run_writes_nothing(tmp_path, capsys):
 
 
 def test_photos_refuses_when_disk_is_short(tmp_path, capsys, monkeypatch):
-    monkeypatch.setattr(cli.photos, "free_bytes", lambda root: 1024)
+    from copart_archive import photos
+    monkeypatch.setattr(photos, "free_bytes", lambda root: 1024)
     assert cli.main(["--root", str(tmp_path / "a"), "photos", str(SALESDATA)]) == 1
     assert "Не хватает места" in capsys.readouterr().out
     assert not (tmp_path / "a").exists()
