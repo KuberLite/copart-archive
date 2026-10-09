@@ -109,3 +109,29 @@ def test_unknown_enabled_group(tmp_path):
     import pytest
     with pytest.raises(ValueError, match="Nope"):
         config.load(path)
+
+
+def test_overrides_round_trip(tmp_path):
+    from dataclasses import replace
+    base = config.load()
+    assert config.load_for(tmp_path) == base  # no file — the defaults
+    changed = replace(base, year_min=2018, makes=frozenset({"BMW", "AUDI"}),
+                      damage_groups={g: base.catalog[g] for g in ("Front_End", "Hail")})
+    config.save_overrides(tmp_path, changed, changed_by=377233264)
+    loaded = config.load_for(tmp_path)
+    assert loaded.year_min == 2018 and loaded.makes == {"BMW", "AUDI"}
+    assert list(loaded.damage_groups) == ["Front_End", "Hail"]
+    assert loaded.group_for("HAIL") == "Hail"
+    saved = config.read_overrides(tmp_path)
+    assert saved["changed_by"] == 377233264 and saved["changed_at"]
+    config.reset_overrides(tmp_path)
+    assert config.load_for(tmp_path) == base
+    config.reset_overrides(tmp_path)  # resetting twice is fine
+
+
+def test_overrides_survive_a_group_removed_from_the_catalog(tmp_path):
+    import json
+    path = config.overrides_path(tmp_path)
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"damage_groups": ["Front_End", "Gone"]}), encoding="utf-8")
+    assert list(config.load_for(tmp_path).damage_groups) == ["Front_End"]

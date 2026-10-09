@@ -19,7 +19,7 @@ def cmd_ingest(args: argparse.Namespace) -> int:
 
 
 def cmd_filter(args: argparse.Namespace) -> int:
-    cfg = config.load()
+    cfg = config.load_for(args.root)
     lots = [lot for path in args.csv for lot in lotsearch.read(path)]
     result = filters.apply(lots, cfg)
     print(result.report())
@@ -30,14 +30,14 @@ def cmd_filter(args: argparse.Namespace) -> int:
 
 
 def cmd_prepare(args: argparse.Namespace) -> int:
-    result = tasks.prepare(args.task, args.root, config.load(),
+    result = tasks.prepare(args.task, args.root, config.load_for(args.root),
                            use_filters=args.filter, limit=args.limit)
     print(result.report())
     return 0
 
 
 def cmd_photos(args: argparse.Namespace) -> int:
-    cfg = config.load()
+    cfg = config.load_for(args.root)
     if args.quality:
         cfg = replace(cfg, photo_quality=args.quality)
     job_plan = jobs.plan(args.file, args.root, cfg, args.filter, args.limit)

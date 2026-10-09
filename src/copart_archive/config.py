@@ -1,6 +1,8 @@
+import json
 import os
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime, timezone
 from pathlib import Path
 
 CONFIG_NAME = Path("config") / "archive.toml"
@@ -8,6 +10,9 @@ CONFIG_NAME = Path("config") / "archive.toml"
 # so the file is looked up by the variable or next to where the command is run.
 REPO_PATH = Path(__file__).resolve().parents[2] / CONFIG_NAME
 PHOTO_QUALITIES = ("thumbnail", "full", "high_res")
+# what the client changes from the bot lives next to the archive, outside the
+# image, so it survives rebuilds; config/archive.toml stays the defaults
+OVERRIDES = Path("state") / "filters.json"
 
 
 @dataclass(frozen=True)
@@ -77,3 +82,50 @@ def load(path: Path | None = None) -> Config:
         photo_quality=quality,
         damage_catalog=catalog,
     )
+
+
+def overrides_path(root: Path) -> Path:
+    return root / OVERRIDES
+
+
+def read_overrides(root: Path) -> dict:
+    path = overrides_path(root)
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+
+
+def with_overrides(base: Config, root: Path) -> Config:
+    """The defaults with the client's changes on top. A group the catalog no
+    longer has is dropped instead of failing — the settings file outlives code."""
+    data = read_overrides(root)
+    changes = {}
+    if "year_min" in data:
+        changes["year_min"] = int(data["year_min"])
+    if "makes" in data:
+        changes["makes"] = frozenset(str(m).strip().upper() for m in data["makes"] if str(m).strip())
+    if "damage_groups" in data:
+        enabled = set(data["damage_groups"])
+        changes["damage_groups"] = {g: v for g, v in base.catalog.items() if g in enabled}
+    return replace(base, **changes)
+
+
+def load_for(root: Path, path: Path | None = None) -> Config:
+    return with_overrides(load(path), root)
+
+
+def save_overrides(root: Path, cfg: Config, changed_by: int | str | None = None) -> None:
+    path = overrides_path(root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = {
+        "year_min": cfg.year_min,
+        "makes": sorted(cfg.makes),
+        "damage_groups": list(cfg.damage_groups),
+        "changed_by": changed_by,
+        "changed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def reset_overrides(root: Path) -> None:
+    overrides_path(root).unlink(missing_ok=True)

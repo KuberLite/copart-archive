@@ -37,3 +37,12 @@ def test_photos_refuses_when_disk_is_short(tmp_path, capsys, monkeypatch):
     assert cli.main(["--root", str(tmp_path / "a"), "photos", str(SALESDATA)]) == 1
     assert "Не хватает места" in capsys.readouterr().out
     assert not (tmp_path / "a").exists()
+
+
+def test_cli_follows_settings_changed_in_the_bot(tmp_path, capsys):
+    from dataclasses import replace
+    from copart_archive import config
+    base = config.load()
+    config.save_overrides(tmp_path, replace(base, year_min=2030))
+    assert cli.main(["--root", str(tmp_path), "photos", str(SALESDATA), "--dry-run"]) == 0
+    assert "К загрузке 0 лотов" in capsys.readouterr().out  # nothing is that new
