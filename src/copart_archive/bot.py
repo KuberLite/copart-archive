@@ -6,18 +6,22 @@ else is told their ID, which is how new IDs are found out.
 """
 
 import asyncio
+import html
 import logging
 import os
+import re
 import tempfile
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import date
 from pathlib import Path, PurePosixPath
 
 from . import config, jobs, layout, net, photos, uploads
 from .tabular import FormatError
 
-STATUS, STOP, RULES = "Статус", "Остановить", "Правила"
+STATUS, STOP, RULES, SETTINGS = "Статус", "Остановить", "Правила", "Настройки"
+BUTTONS = (STATUS, STOP, RULES, SETTINGS)
 MAX_FILE = 20 * 1024**2  # what the Telegram Bot API lets a bot download
 PROGRESS_EVERY = 30.0  # seconds between progress message edits
 
@@ -64,7 +68,7 @@ def help_text() -> str:
     return ("Пришлите файл выгрузки Copart (.xlsx, .csv или .zip) — загрузка фото начнётся сразу.\n"
             f"«{STATUS}» — что идёт сейчас и сколько места. «{STOP}» — прервать загрузку, "
             "скачанное останется, повторная отправка того же файла докачает остальное. "
-            f"«{RULES}» — какие лоты берутся из файла.")
+            f"«{RULES}» — какие лоты берутся из файла. «{SETTINGS}» — поменять год, марки и повреждения.")
 
 
 def rules_text(cfg: config.Config) -> str:
@@ -101,6 +105,70 @@ def status_text(running: jobs.State | None, root: Path) -> str:
     lots = len(layout.existing_lot_dirs(root))
     lines.append(f"В архиве лотов: {lots}. Свободно: {photos.human(photos.free_bytes(root))}")
     return "\n\n".join(lines)
+
+
+def settings_text(cfg: config.Config, root: Path) -> str:
+    saved = config.read_overrides(root)
+    origin = (f"изменено: {saved.get('changed_by')}, {saved.get('changed_at', '')[:16].replace('T', ' ')} UTC"
+              if saved else "стандартные, из config/archive.toml")
+    groups = ", ".join(cfg.damage_groups) or "ни одной"
+    return (f"Настройки отбора ({origin}):\n\n"
+            f"• Год выпуска: с {cfg.year_min}\n"
+            f"• Марки ({len(cfg.makes)}): {', '.join(sorted(cfg.makes))}\n"
+            f"• Повреждения ({len(cfg.damage_groups)} из {len(cfg.catalog)}): {groups}\n\n"
+            "Изменения действуют со следующего файла; загрузка, которая уже идёт, "
+            "доработает по старым правилам.")
+
+
+def parse_year(text: str, today: date | None = None) -> int:
+    today = today or date.today()
+    if not re.fullmatch(r"\s*\d{4}\s*", text or ""):
+        raise ValueError("Нужен год четырьмя цифрами, например 2015.")
+    year = int(text)
+    if not 1900 <= year <= today.year + 2:
+        raise ValueError(f"Год должен быть между 1900 и {today.year + 2}.")
+    return year
+
+
+def parse_makes(text: str) -> list[str]:
+    """Commas, semicolons or new lines — whatever comes out of a copied list."""
+    makes = []
+    for part in re.split(r"[,;\n]+", text or ""):
+        make = re.sub(r"\s+", " ", part).strip().upper()
+        if make and make not in makes:
+            makes.append(make)
+    if not makes:
+        raise ValueError("Список пустой — нужна хотя бы одна марка.")
+    return makes
+
+
+def makes_diff(old: frozenset[str], new: list[str]) -> str:
+    added = [m for m in new if m not in old]
+    removed = sorted(old - set(new))
+    lines = [f"Марок теперь: {len(new)}."]
+    if added:
+        lines.append("Добавлены: " + ", ".join(added))
+    if removed:
+        lines.append("Убраны: " + ", ".join(removed))
+    if not added and not removed:
+        lines.append("Список не изменился.")
+    return "\n".join(lines)
+
+
+def damage_buttons(cfg: config.Config):
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    rows = [[InlineKeyboardButton(
+                text=("✅ " if group in cfg.damage_groups else "▫️ ") + group,
+                callback_data=f"dmg:{group}")]
+            for group in cfg.catalog]
+    rows.append([InlineKeyboardButton(text="Готово", callback_data="dmg:done")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def damage_help(cfg: config.Config) -> str:
+    lines = ["Отметьте группы повреждений, которые брать. Что входит в группу (как пишет Copart):", ""]
+    lines += [f"{group} — {', '.join(sorted(values))}" for group, values in cfg.catalog.items()]
+    return "\n".join(lines)
 
 
 class Runner:
@@ -144,8 +212,15 @@ class Runner:
 def build(settings: Settings, cfg: config.Config):
     from aiogram import Bot, Dispatcher, F
     from aiogram.exceptions import TelegramAPIError
-    from aiogram.filters import CommandStart
-    from aiogram.types import KeyboardButton, Message, ReplyKeyboardMarkup
+    from aiogram.filters import CommandStart, StateFilter
+    from aiogram.fsm.context import FSMContext
+    from aiogram.fsm.state import State, StatesGroup
+    from aiogram.types import (CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup,
+                               KeyboardButton, Message, ReplyKeyboardMarkup)
+
+    class Editing(StatesGroup):
+        year = State()
+        makes = State()
 
     bot = Bot(settings.token)
     dp = Dispatcher()
@@ -156,8 +231,28 @@ def build(settings: Settings, cfg: config.Config):
     starting = asyncio.Lock()
     keyboard = ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text=STATUS), KeyboardButton(text=STOP)],
-                  [KeyboardButton(text=RULES)]],
+                  [KeyboardButton(text=RULES), KeyboardButton(text=SETTINGS)]],
         resize_keyboard=True, is_persistent=True)
+    settings_menu = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Год", callback_data="cfg:year"),
+         InlineKeyboardButton(text="Марки", callback_data="cfg:makes")],
+        [InlineKeyboardButton(text="Повреждения", callback_data="cfg:damage")],
+        [InlineKeyboardButton(text="Сбросить к стандартным", callback_data="cfg:reset")],
+    ])
+    cancel_menu = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Отмена", callback_data="cfg:cancel")]])
+
+    def current() -> config.Config:
+        """Defaults plus what was changed from the bot — read anew every time."""
+        return config.with_overrides(cfg, settings.root)
+
+    def who(user) -> str:
+        return f"{user.full_name} ({user.id})" if user else "?"
+
+    def save(new: config.Config, user) -> None:
+        config.save_overrides(settings.root, new, who(user))
+        log.info("настройки изменил %s: год %s, марок %s, группы %s",
+                 who(user), new.year_min, len(new.makes), list(new.damage_groups))
 
     @dp.message(~F.from_user.id.in_(settings.allowed))
     async def deny(message: Message) -> None:
@@ -165,27 +260,133 @@ def build(settings: Settings, cfg: config.Config):
         log.info("отказ в доступе: %s", user_id)
         await message.answer(access_denied_text(user_id))
 
+    @dp.callback_query(~F.from_user.id.in_(settings.allowed))
+    async def deny_button(callback: CallbackQuery) -> None:
+        await callback.answer("Доступа нет", show_alert=True)
+
+    # the keyboard buttons come first and drop any half-done input, so pressing
+    # «Статус» while the bot waits for a year does not get read as the year
     @dp.message(CommandStart())
-    async def start(message: Message) -> None:
+    async def start(message: Message, state: FSMContext) -> None:
+        await state.clear()
         await message.answer(help_text(), reply_markup=keyboard)
 
     @dp.message(F.text == STATUS)
-    async def status(message: Message) -> None:
+    async def status(message: Message, state: FSMContext) -> None:
+        await state.clear()
         text = await asyncio.to_thread(status_text, runner.current(), settings.root)
         await message.answer(text, reply_markup=keyboard)
 
     @dp.message(F.text == RULES)
-    async def rules(message: Message) -> None:
-        await message.answer(rules_text(cfg), reply_markup=keyboard)
+    async def rules(message: Message, state: FSMContext) -> None:
+        await state.clear()
+        await message.answer(rules_text(current()), reply_markup=keyboard)
 
     @dp.message(F.text == STOP)
-    async def stop(message: Message) -> None:
+    async def stop(message: Message, state: FSMContext) -> None:
+        await state.clear()
         text = ("Останавливаю после текущего лота, скачанное остаётся."
                 if runner.stop() else "Сейчас ничего не качается.")
         await message.answer(text, reply_markup=keyboard)
 
+    @dp.message(F.text == SETTINGS)
+    async def show_settings(message: Message, state: FSMContext) -> None:
+        await state.clear()
+        await message.answer(settings_text(current(), settings.root), reply_markup=settings_menu)
+
+    @dp.callback_query(F.data == "cfg:year")
+    async def ask_year(callback: CallbackQuery, state: FSMContext) -> None:
+        await state.set_state(Editing.year)
+        await callback.message.answer(
+            f"Пришлите год, начиная с которого брать лоты. Сейчас: {current().year_min}.",
+            reply_markup=cancel_menu)
+        await callback.answer()
+
+    @dp.callback_query(F.data == "cfg:makes")
+    async def ask_makes(callback: CallbackQuery, state: FSMContext) -> None:
+        await state.set_state(Editing.makes)
+        makes = "\n".join(sorted(current().makes))
+        await callback.message.answer(
+            "Пришлите новый список марок — он заменит текущий. Проще всего скопировать "
+            "список ниже, поправить и отправить обратно; можно через запятую или каждую "
+            "марку с новой строки. Пишите, как Copart: MERCEDES-BENZ, LAND ROVER.\n\n"
+            f"<code>{html.escape(makes)}</code>",
+            parse_mode="HTML", reply_markup=cancel_menu)
+        await callback.answer()
+
+    @dp.callback_query(F.data == "cfg:damage")
+    async def ask_damage(callback: CallbackQuery, state: FSMContext) -> None:
+        await state.clear()
+        now = current()
+        await callback.message.answer(damage_help(now), reply_markup=damage_buttons(now))
+        await callback.answer()
+
+    @dp.callback_query(F.data.startswith("dmg:") & (F.data != "dmg:done"))
+    async def toggle_damage(callback: CallbackQuery) -> None:
+        group = callback.data.removeprefix("dmg:")
+        now = current()
+        if group not in now.catalog:
+            await callback.answer("Такой группы больше нет", show_alert=True)
+            return
+        enabled = set(now.damage_groups)
+        if group in enabled and len(enabled) == 1:
+            await callback.answer("Хотя бы одна группа должна остаться", show_alert=True)
+            return
+        enabled ^= {group}
+        new = replace(now, damage_groups={g: v for g, v in now.catalog.items() if g in enabled})
+        save(new, callback.from_user)
+        await callback.message.edit_reply_markup(reply_markup=damage_buttons(new))
+        await callback.answer(f"{group}: {'включено' if group in enabled else 'выключено'}")
+
+    @dp.callback_query(F.data == "dmg:done")
+    async def damage_done(callback: CallbackQuery) -> None:
+        await callback.message.edit_reply_markup(reply_markup=None)
+        await callback.message.answer(settings_text(current(), settings.root), reply_markup=settings_menu)
+        await callback.answer()
+
+    @dp.callback_query(F.data == "cfg:reset")
+    async def reset(callback: CallbackQuery, state: FSMContext) -> None:
+        await state.clear()
+        config.reset_overrides(settings.root)
+        log.info("настройки сбросил %s", who(callback.from_user))
+        await callback.message.answer("Вернул стандартные настройки.\n\n"
+                                      + settings_text(current(), settings.root), reply_markup=settings_menu)
+        await callback.answer()
+
+    @dp.callback_query(F.data == "cfg:cancel")
+    async def cancel(callback: CallbackQuery, state: FSMContext) -> None:
+        await state.clear()
+        await callback.message.edit_reply_markup(reply_markup=None)
+        await callback.answer("Отменено")
+
+    @dp.message(StateFilter(Editing.year), F.text)
+    async def set_year(message: Message, state: FSMContext) -> None:
+        try:
+            year = parse_year(message.text)
+        except ValueError as error:
+            await message.answer(f"{error} Пришлите ещё раз или нажмите «Отмена».", reply_markup=cancel_menu)
+            return
+        save(replace(current(), year_min=year), message.from_user)
+        await state.clear()
+        await message.answer(f"Готово: берём лоты с {year} года.\n\n"
+                             + settings_text(current(), settings.root), reply_markup=settings_menu)
+
+    @dp.message(StateFilter(Editing.makes), F.text)
+    async def set_makes(message: Message, state: FSMContext) -> None:
+        try:
+            makes = parse_makes(message.text)
+        except ValueError as error:
+            await message.answer(f"{error} Пришлите ещё раз или нажмите «Отмена».", reply_markup=cancel_menu)
+            return
+        before = current()
+        save(replace(before, makes=frozenset(makes)), message.from_user)
+        await state.clear()
+        await message.answer(makes_diff(before.makes, makes) + "\n\n"
+                             + settings_text(current(), settings.root), reply_markup=settings_menu)
+
     @dp.message(F.document)
-    async def document(message: Message) -> None:
+    async def document(message: Message, state: FSMContext) -> None:
+        await state.clear()  # a file ends any half-done settings input
         doc = message.document
         log.info("файл от %s: %s, %s байт", message.from_user.id, doc.file_name, doc.file_size)
         if runner.busy or starting.locked():
@@ -208,7 +409,8 @@ def build(settings: Settings, cfg: config.Config):
                 local = Path(tmp) / name
                 await bot.download(doc, destination=local)
                 stored = await asyncio.to_thread(uploads.store, local, settings.root, name)
-            job_plan = await asyncio.to_thread(jobs.plan, stored.table, settings.root, cfg)
+            job_cfg = current()  # the settings at the moment the file arrives
+            job_plan = await asyncio.to_thread(jobs.plan, stored.table, settings.root, job_cfg)
         except FormatError as error:
             log.info("не прочитан: %s", error)
             await message.answer(f"Не получилось прочитать файл: {error}")
@@ -224,7 +426,7 @@ def build(settings: Settings, cfg: config.Config):
         log.info("сохранён %s%s; к загрузке %s лотов%s", stored.path.name,
                  " (повтор)" if stored.duplicate else "", job_plan.count,
                  f"; {job_plan.warning}" if job_plan.warning else "")
-        text = job_plan.describe(cfg.photo_quality)
+        text = job_plan.describe(job_cfg.photo_quality)
         if stored.duplicate:
             text = "Этот файл уже присылали — докачаю то, чего не хватает.\n\n" + text
         await message.answer(text)
@@ -232,7 +434,7 @@ def build(settings: Settings, cfg: config.Config):
             return
 
         progress_message = await message.answer("Начинаю загрузку…")
-        job = jobs.Job(job_plan, settings.root, cfg, net.Http(delay=settings.delay), name)
+        job = jobs.Job(job_plan, settings.root, job_cfg, net.Http(delay=settings.delay), name)
 
         async def on_progress(state: jobs.State) -> None:
             try:

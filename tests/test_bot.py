@@ -279,3 +279,197 @@ def test_rules_button(tmp_path):
 
 def test_stranger_does_not_see_the_rules(tmp_path):
     assert run_dispatch(tmp_path, 999, bot.RULES) == [bot.access_denied_text(999)]
+
+
+# --- settings -----------------------------------------------------------------
+
+from datetime import date as _date
+
+
+def test_parse_year():
+    today = _date(2026, 10, 9)
+    assert bot.parse_year(" 2018 ", today) == 2018
+    assert bot.parse_year("2028", today) == 2028
+    for bad in ("18", "две тысячи", "2029", "1800", ""):
+        with pytest.raises(ValueError):
+            bot.parse_year(bad, today)
+
+
+def test_parse_makes():
+    assert bot.parse_makes("bmw, Audi\nAUDI;  land   rover ") == ["BMW", "AUDI", "LAND ROVER"]
+    with pytest.raises(ValueError):
+        bot.parse_makes(" ,\n; ")
+
+
+def test_makes_diff():
+    text = bot.makes_diff(frozenset({"BMW", "KIA"}), ["BMW", "CHEVROLET"])
+    assert "Добавлены: CHEVROLET" in text and "Убраны: KIA" in text
+    assert "не изменился" in bot.makes_diff(frozenset({"BMW"}), ["BMW"])
+
+
+def test_settings_text_shows_who_changed(tmp_path):
+    from dataclasses import replace
+    base = config.load()
+    assert "стандартные" in bot.settings_text(base, tmp_path)
+    config.save_overrides(tmp_path, replace(base, year_min=2018), "Денис (377233264)")
+    text = bot.settings_text(config.load_for(tmp_path), tmp_path)
+    assert "с 2018" in text and "Денис (377233264)" in text and "7 из 17" in text
+
+
+class ChatSession(FakeSession):
+    def __init__(self):
+        super().__init__()
+        self.alerts: list[tuple[str, bool]] = []
+
+    async def make_request(self, bot_, method, timeout=None):
+        from aiogram.methods import AnswerCallbackQuery
+        if isinstance(method, AnswerCallbackQuery):
+            self.alerts.append((method.text or "", bool(method.show_alert)))
+            return True
+        return await super().make_request(bot_, method, timeout)
+
+
+class Conversation:
+    """One chat with the bot through the real dispatcher, no network."""
+
+    def __init__(self, root, allowed=frozenset({100})):
+        self.settings = bot.Settings(token="123:abc", allowed=allowed, root=root)
+        self.telegram, self.dp = bot.build(self.settings, config.load())
+        self.telegram.session = ChatSession()
+        self.update_id = 100
+
+    @property
+    def sent(self):
+        return self.telegram.session.sent
+
+    @property
+    def alerts(self):
+        return self.telegram.session.alerts
+
+    def _next(self):
+        self.update_id += 1
+        return self.update_id
+
+    def say(self, text, user_id=100):
+        user = User(id=user_id, is_bot=False, first_name="Денис")
+        update = Update(update_id=self._next(), message=Message(
+            message_id=self.update_id, date=datetime.datetime.now(),
+            chat=Chat(id=user_id, type="private"), from_user=user, text=text))
+        asyncio.run(self.dp.feed_update(self.telegram, update))
+
+    def press(self, data, user_id=100):
+        from aiogram.types import CallbackQuery
+        user = User(id=user_id, is_bot=False, first_name="Денис")
+        message = Message(message_id=1, date=datetime.datetime.now(),
+                          chat=Chat(id=user_id, type="private"), text="меню")
+        update = Update(update_id=self._next(), callback_query=CallbackQuery(
+            id=str(self.update_id), from_user=user, chat_instance="c", message=message, data=data))
+        asyncio.run(self.dp.feed_update(self.telegram, update))
+
+    def cfg(self):
+        return config.load_for(self.settings.root)
+
+
+def test_settings_button(tmp_path):
+    talk = Conversation(tmp_path)
+    talk.say(bot.SETTINGS)
+    assert "Настройки отбора" in talk.sent[-1] and "с 2015" in talk.sent[-1]
+
+
+def test_change_year(tmp_path):
+    talk = Conversation(tmp_path)
+    talk.press("cfg:year")
+    talk.say("двадцатый")
+    assert "четырьмя цифрами" in talk.sent[-1]
+    assert talk.cfg().year_min == 2015  # nothing saved, still waiting
+    talk.say("2018")
+    assert talk.cfg().year_min == 2018
+    assert "с 2018 года" in talk.sent[-1]
+    assert "Денис (100)" in config.read_overrides(tmp_path)["changed_by"]
+
+
+def test_keyboard_button_cancels_the_input(tmp_path):
+    talk = Conversation(tmp_path)
+    talk.press("cfg:year")
+    talk.say(bot.STATUS)  # not a year: the status is shown and the input dropped
+    assert "Загрузок ещё не было" in talk.sent[-1]
+    talk.say("2020")
+    assert talk.cfg().year_min == 2015
+
+
+def test_change_makes(tmp_path):
+    talk = Conversation(tmp_path)
+    talk.press("cfg:makes")
+    assert "MERCEDES-BENZ" in talk.sent[-1]  # the current list to copy
+    talk.say("bmw, Audi\nchevrolet")
+    assert talk.cfg().makes == {"BMW", "AUDI", "CHEVROLET"}
+    assert "Добавлены: CHEVROLET" in talk.sent[-1]
+
+
+def test_toggle_damage_groups(tmp_path):
+    talk = Conversation(tmp_path)
+    talk.press("cfg:damage")
+    assert "Fire — BURN, BURN - ENGINE, BURN - INTERIOR" in talk.sent[-1]
+    talk.press("dmg:Hail")
+    assert "Hail" in talk.cfg().damage_groups
+    assert talk.alerts[-1] == ("Hail: включено", False)
+    talk.press("dmg:Hail")
+    assert "Hail" not in talk.cfg().damage_groups
+
+
+def test_last_damage_group_cannot_be_switched_off(tmp_path):
+    talk = Conversation(tmp_path)
+    for group in ["Front_End", "Rear_End", "Side", "Flood", "Rollover", "All_Over"]:
+        talk.press(f"dmg:{group}")
+    assert list(talk.cfg().damage_groups) == ["Undercarriage"]
+    talk.press("dmg:Undercarriage")
+    assert list(talk.cfg().damage_groups) == ["Undercarriage"]
+    assert talk.alerts[-1] == ("Хотя бы одна группа должна остаться", True)
+
+
+def test_reset(tmp_path):
+    talk = Conversation(tmp_path)
+    talk.press("cfg:year")
+    talk.say("2020")
+    talk.press("cfg:reset")
+    assert talk.cfg() == config.load()
+    assert "Вернул стандартные" in talk.sent[-1]
+
+
+def test_stranger_cannot_press_settings(tmp_path):
+    talk = Conversation(tmp_path)
+    talk.press("dmg:Hail", user_id=999)
+    talk.press("cfg:reset", user_id=999)
+    assert talk.alerts == [("Доступа нет", True), ("Доступа нет", True)]
+    assert talk.cfg() == config.load()
+
+
+def test_rules_show_the_changed_settings(tmp_path):
+    talk = Conversation(tmp_path)
+    talk.press("cfg:year")
+    talk.say("2019")
+    talk.say(bot.RULES)
+    assert "2019 и новее" in talk.sent[-1]
+
+
+def test_new_settings_apply_to_the_next_file(tmp_path, monkeypatch):
+    from dataclasses import replace
+    root = tmp_path / "archive"
+    config.save_overrides(root, replace(config.load(), year_min=2030))
+    sent, _ = send_file(tmp_path, monkeypatch)
+    assert any("К загрузке 0 лотов" in t for t in sent)
+
+
+def test_file_drops_a_pending_settings_input(tmp_path):
+    talk = Conversation(tmp_path)
+    talk.press("cfg:year")
+    talk.telegram.download = None  # the file is not read here; only the state matters
+    from aiogram.types import Document
+    user = User(id=100, is_bot=False, first_name="Денис")
+    update = Update(update_id=999, message=Message(
+        message_id=999, date=datetime.datetime.now(), chat=Chat(id=100, type="private"),
+        from_user=user, document=Document(file_id="f", file_unique_id="u",
+                                          file_name="big.xlsx", file_size=25 * 1024**2)))
+    asyncio.run(talk.dp.feed_update(talk.telegram, update))
+    talk.say("2020")  # no longer read as a year
+    assert talk.cfg().year_min == 2015
