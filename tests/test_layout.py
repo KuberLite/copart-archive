@@ -36,9 +36,15 @@ def test_flood_group(tmp_path, lots):
     assert path.relative_to(tmp_path).parts[:2] == ("photos", "Flood")
 
 
-def test_off_group_damage_goes_to_other(tmp_path, lots):
+def test_damage_off_the_filter_still_gets_its_catalog_folder(tmp_path, lots):
     path = layout.lot_dir(tmp_path, lots["73853305"], config.load())  # MINOR DENT/SCRATCHES
-    assert path.relative_to(tmp_path).parts[1] == "Other"
+    assert path.relative_to(tmp_path).parts[1] == "Minor_Dent"
+
+
+def test_unknown_damage_goes_to_other(tmp_path, lots):
+    from dataclasses import replace
+    odd = replace(lots["73853305"], primary_damage="SOMETHING NEW")
+    assert layout.lot_dir(tmp_path, odd, config.load()).relative_to(tmp_path).parts[1] == "Other"
 
 
 def test_existing_lot_dirs(tmp_path, lots):

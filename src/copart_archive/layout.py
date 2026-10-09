@@ -30,7 +30,7 @@ def safe_name(text: str) -> str:
 
 
 def damage_group(lot: Lot, cfg: Config) -> str:
-    return cfg.group_for(lot.primary_damage) or cfg.other_group
+    return cfg.folder_for(lot.primary_damage)
 
 
 def folder_name(lot: Lot) -> str:

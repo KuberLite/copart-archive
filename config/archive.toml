@@ -11,11 +11,16 @@ makes = [
   "VOLVO", "CADILLAC", "INFINITI", "ACURA", "JAGUAR", "TOYOTA", "HONDA",
   "NISSAN", "HYUNDAI", "KIA", "VOLKSWAGEN", "MAZDA", "FORD", "JEEP",
 ]
+# Damage groups that pass the filter; the rest of the catalog is off.
+damage_groups = [
+  "Front_End", "Rear_End", "Side", "Flood", "Rollover", "All_Over", "Undercarriage",
+]
 
-# Group = top-level folder in photos/. Values are spelled as Copart writes them.
-# A lot whose damage is outside all groups fails the filter; if it comes in
-# a task file anyway, it goes to other_group.
-[damage_groups]
+# Every damage group the archive knows. Group = top-level folder in photos/,
+# values are spelled as Copart writes them; together they cover all 25 values
+# seen in the Sales Data file. The bot switches groups on and off from here.
+# A lot whose damage is in no group goes to other_group if it is taken at all.
+[damage_catalog]
 Front_End = ["FRONT END"]
 Rear_End = ["REAR END"]
 Side = ["SIDE"]
@@ -23,6 +28,19 @@ Flood = ["WATER/FLOOD"]
 Rollover = ["ROLLOVER"]
 All_Over = ["ALL OVER"]
 Undercarriage = ["UNDERCARRIAGE"]
+Hail = ["HAIL"]
+Fire = ["BURN", "BURN - ENGINE", "BURN - INTERIOR"]
+Top_Roof = ["TOP/ROOF"]
+Vandalism = ["VANDALISM"]
+Stripped = ["STRIPPED"]
+Frame = ["FRAME DAMAGE"]
+Mechanical = ["MECHANICAL"]
+Minor_Dent = ["MINOR DENT/SCRATCHES"]
+Normal_Wear = ["NORMAL WEAR"]
+Misc = [
+  "DAMAGE HISTORY", "BIOHAZARD/CHEMICAL", "MISSING/ALTERED VIN", "PARTIAL REPAIR",
+  "REPLACED VIN", "REJECTED REPAIR", "UNKNOWN",
+]
 
 [layout]
 other_group = "Other"

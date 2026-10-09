@@ -15,17 +15,28 @@ class Config:
     year_min: int
     makes: frozenset[str]
     vehicle_types: frozenset[str]
-    damage_groups: dict[str, frozenset[str]]
+    damage_groups: dict[str, frozenset[str]]  # the groups switched on — the filter
     other_group: str
     photo_quality: str
+    damage_catalog: dict[str, frozenset[str]] | None = None  # every known group
+
+    @property
+    def catalog(self) -> dict[str, frozenset[str]]:
+        return self.damage_catalog or self.damage_groups
 
     def group_for(self, damage: str) -> str | None:
-        """Group for a Copart damage value, or None if it is outside all groups."""
-        damage = damage.strip().upper()
-        for group, values in self.damage_groups.items():
-            if damage in values:
-                return group
-        return None
+        """Switched-on group for a Copart damage value; None means the lot is filtered out."""
+        return _lookup(self.damage_groups, damage)
+
+    def folder_for(self, damage: str) -> str:
+        """Where a lot goes in photos/. Uses the whole catalog, so a hail lot taken
+        without filters still lands in Hail, not in Other."""
+        return _lookup(self.catalog, damage) or self.other_group
+
+
+def _lookup(groups: dict[str, frozenset[str]], damage: str) -> str | None:
+    damage = damage.strip().upper()
+    return next((group for group, values in groups.items() if damage in values), None)
 
 
 def find() -> Path:
@@ -49,14 +60,20 @@ def load(path: Path | None = None) -> Config:
     if quality not in PHOTO_QUALITIES:
         raise ValueError(f"photos.quality: {quality!r}, ожидается одно из {PHOTO_QUALITIES}")
 
+    # older configs had only [damage_groups], all of them on
+    catalog = {group: frozenset(v.upper() for v in values)
+               for group, values in (raw.get("damage_catalog") or raw["damage_groups"]).items()}
+    enabled = raw["filters"].get("damage_groups", list(catalog))
+    unknown = [g for g in enabled if g not in catalog]
+    if unknown:
+        raise ValueError(f"filters.damage_groups: нет таких групп в каталоге: {unknown}")
+
     return Config(
         year_min=raw["filters"]["year_min"],
         makes=frozenset(m.upper() for m in raw["filters"]["makes"]),
         vehicle_types=frozenset(t.upper() for t in raw["filters"].get("vehicle_types", ())),
-        damage_groups={
-            group: frozenset(v.upper() for v in values)
-            for group, values in raw["damage_groups"].items()
-        },
+        damage_groups={g: catalog[g] for g in catalog if g in enabled},
         other_group=raw["layout"]["other_group"],
         photo_quality=quality,
+        damage_catalog=catalog,
     )

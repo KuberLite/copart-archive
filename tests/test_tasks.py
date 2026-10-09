@@ -11,7 +11,9 @@ def test_prepare_creates_dirs_with_metadata(tmp_path):
     result = tasks.prepare(SAMPLE, tmp_path, config.load())
     assert len(result.dirs) == result.created == 11
     assert result.not_in_cases == []
-    assert result.by_group["Other"] == 3  # MINOR DENT, TOP/ROOF, BURN
+    # off the filter, but each still has its folder in the catalog
+    assert (result.by_group["Minor_Dent"], result.by_group["Top_Roof"], result.by_group["Fire"]) == (1, 1, 1)
+    assert result.by_group["Other"] == 0
 
     qx60 = tmp_path / "photos/Front_End/INFINITI/2019/QX60/COPART_64557536"
     data = metadata.read(qx60)
