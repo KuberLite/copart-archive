@@ -65,7 +65,8 @@ Alternatives: `rclone mount` with WinFsp (a command that has to keep running),
 or paid tools — Mountain Duck (also gives a drive in macOS Finder), SFTP Drive.
 
 Better than passing the private key around: put the person's own public key into
-`/etc/ssh/authorized_keys/copart` (one key per line).
+`/etc/copart-sftp/keys/copart` (one key per line, the file `644`, the directory `755`).
+Removing the line takes the access away; no reload is needed.
 
 ## How it is built
 
@@ -75,6 +76,10 @@ Better than passing the private key around: put the person's own public key into
   `/etc/ssh/sshd_config` sets `ChrootDirectory`, `ForceCommand internal-sftp -R`
   (`-R` is read-only), keys only, no forwarding. `Subsystem sftp internal-sftp`
   is required for the chroot.
-- `AuthorizedKeysFile /etc/ssh/authorized_keys/%u`: the directory must be `755`
-  and the file `644` — sshd reads it as the user, not as root.
+- Keys come from `/usr/local/sbin/copart-sftp-keys` (`AuthorizedKeysCommand`, run
+  as `nobody`), which prints `/etc/copart-sftp/keys/<user>`. **Not**
+  `AuthorizedKeysFile`: cloud-init reads that setting on every boot, ignores the
+  `Match` block it sits in, writes root's keys to that path and closes the directory
+  to `700` — after which sshd, reading as the user, cannot see the copart key.
+  This broke SFTP after the first reboot of the production server.
 - The distribution config is kept as `/etc/ssh/sshd_config.before-copart`.
