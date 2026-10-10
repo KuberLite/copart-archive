@@ -1,15 +1,14 @@
-# Test deployment
+# Deployment
 
-The server runs everything in Docker, so the archive does too — no system Python
-is touched (Ubuntu 22.04 ships 3.10, the project needs 3.12).
+The archive runs in Docker — no system Python is touched (Ubuntu 22.04 ships
+3.10, the project needs 3.12).
 
 ```sh
-# copy the code
-rsync -a --delete --exclude .venv --exclude .git --exclude archive \
-  ./ root@HOST:/opt/copart-archive/app/
+# code, image and the tests in a clean container on the host; fails if the
+# tests fail, restarts the bot if it is running
+deploy/push.sh root@HOST
 
-# build and run
-ssh root@HOST 'cd /opt/copart-archive/app && docker build -t copart-archive:0.1 .'
+# run
 ssh root@HOST '/opt/copart-archive/run.sh photos /input/SalesData.csv --dry-run'
 
 # a long run: detach it, the server drops idle ssh sessions
@@ -46,7 +45,8 @@ Layout on the server:
   app/      the code
   input/    files from the client (mounted read-only)
   archive/  cases/ and photos/ — the archive itself
-  run.sh
+  run.sh, bot.sh
+  host.conf   per-host settings, e.g. MEMORY=700m on a 1 GB machine
 ```
 
 The tests can be run against the deployed copy:
