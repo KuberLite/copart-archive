@@ -8,6 +8,7 @@ BASE=${BASE:-/opt/copart-archive}
 # per-host settings, e.g. MEMORY=700m on a small machine
 [ -f "$BASE/host.conf" ] && . "$BASE/host.conf"
 IMAGE=${IMAGE:-copart-archive:0.1}
+MEMORY=${MEMORY:-1g}
 
 if [ ! -f "$BASE/bot.env" ]; then
   echo "нет $BASE/bot.env — нужны BOT_TOKEN и BOT_ALLOWED_IDS" >&2
@@ -18,7 +19,7 @@ chmod 600 "$BASE/bot.env"
 docker rm -f copart-bot >/dev/null 2>&1 || true
 docker run -d --name copart-bot \
   --restart unless-stopped \
-  --memory=1g \
+  --memory="$MEMORY" \
   --log-opt max-size=10m --log-opt max-file=3 \
   --env-file "$BASE/bot.env" \
   -v "$BASE/archive:/archive" \
