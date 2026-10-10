@@ -5,6 +5,8 @@
 #   BOT_ALLOWED_IDS=111111111 222222222
 set -eu
 BASE=${BASE:-/opt/copart-archive}
+# per-host settings, e.g. MEMORY=700m on a small machine
+[ -f "$BASE/host.conf" ] && . "$BASE/host.conf"
 IMAGE=${IMAGE:-copart-archive:0.1}
 
 if [ ! -f "$BASE/bot.env" ]; then

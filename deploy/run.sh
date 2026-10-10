@@ -4,6 +4,8 @@
 # sessions, which kills an attached long run. Logs stay until the next run.
 set -eu
 BASE=${BASE:-/opt/copart-archive}
+# per-host settings, e.g. MEMORY=700m on a small machine
+[ -f "$BASE/host.conf" ] && . "$BASE/host.conf"
 IMAGE=${IMAGE:-copart-archive:0.1}
 NAME=${NAME:-copart-archive-run}
 MEMORY=${MEMORY:-1g}
