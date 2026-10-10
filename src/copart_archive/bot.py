@@ -177,10 +177,13 @@ class Runner:
     def __init__(self):
         self.job: jobs.Job | None = None
         self._thread: threading.Thread | None = None
+        self._running = False
 
     @property
     def busy(self) -> bool:
-        return bool(self._thread and self._thread.is_alive())
+        # a flag, not thread.is_alive(): the thread outlives the "done" message by a
+        # moment, and a file sent right after it must not be told a job is running
+        return self._running
 
     def current(self) -> jobs.State | None:
         return self.job.state if self.busy and self.job else None
@@ -201,10 +204,14 @@ class Runner:
                 asyncio.run_coroutine_threadsafe(on_progress(state), loop)
 
         def work() -> None:
-            state = job.run(progress)
+            try:
+                state = job.run(progress)
+            finally:
+                self._running = False  # before the message goes out
             asyncio.run_coroutine_threadsafe(on_done(state), loop)
 
         self.job = job
+        self._running = True
         self._thread = threading.Thread(target=work, name="photo-job", daemon=True)
         self._thread.start()
 

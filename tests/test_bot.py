@@ -473,3 +473,22 @@ def test_file_drops_a_pending_settings_input(tmp_path):
     asyncio.run(talk.dp.feed_update(talk.telegram, update))
     talk.say("2020")  # no longer read as a year
     assert talk.cfg().year_min == 2015
+
+
+def test_runner_is_free_when_the_done_message_is_sent():
+    """The next file may come the instant «завершена» arrives."""
+    async def scenario():
+        runner, busy_at_done, done = bot.Runner(), [], asyncio.Event()
+
+        async def on_done(state):
+            busy_at_done.append(runner.busy)
+            done.set()
+
+        async def on_progress(state):
+            pass
+
+        runner.start(FakeJob(), asyncio.get_running_loop(), on_progress, on_done)
+        await asyncio.wait_for(done.wait(), 5)
+        return busy_at_done
+
+    assert asyncio.run(scenario()) == [False]
