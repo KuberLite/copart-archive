@@ -77,11 +77,11 @@ Removing the line takes the access away; no reload is needed.
 
 ## How it is built
 
-- `/srv/copart-sftp/archive` is a read-only bind mount of the archive (in `/etc/fstab`),
+- `/srv/copart-sftp/archive` is a bind mount of the archive (`bind,ro` or `bind,rw`, in `/etc/fstab`),
   and `/srv/copart-sftp` is the chroot — so the account cannot see the rest of the disk.
 - The user `copart` is in the group `sftponly`; the `Match Group sftponly` block in
-  `/etc/ssh/sshd_config` sets `ChrootDirectory`, `ForceCommand internal-sftp -R`
-  (`-R` is read-only), keys only, no forwarding. `Subsystem sftp internal-sftp`
+  `/etc/ssh/sshd_config` sets `ChrootDirectory`, `ForceCommand internal-sftp`
+  (with `-R` in read-only mode), keys only, no forwarding. `Subsystem sftp internal-sftp`
   is required for the chroot.
 - Keys come from `/usr/local/sbin/copart-sftp-keys` (`AuthorizedKeysCommand`, run
   as `nobody`), which prints `/etc/copart-sftp/keys/<user>`. **Not**
