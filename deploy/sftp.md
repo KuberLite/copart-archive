@@ -5,7 +5,7 @@ The account is read-only, has no shell and is caged in a directory that holds
 nothing but the archive.
 
 ```
-host     grahovskiy.com   port 22
+host     134.122.70.187   port 22   (production; the test box is grahovskiy.com)
 user     copart           key /root/copart-sftp-key (private, root only)
 path     /archive         (the real path is /opt/copart-archive/archive)
 ```
@@ -19,9 +19,9 @@ and a file downloads fine.
 ## Clients
 
 - **Windows** — WinSCP or FileZilla; for a drive letter see below.
-- **Linux** — the file manager opens `sftp://copart@grahovskiy.com/archive`, or `sshfs`.
+- **Linux** — the file manager opens `sftp://copart@134.122.70.187/archive`, or `sshfs`.
 - **macOS** — Finder has no SFTP; mount with rclone, see below.
-- **CLI** — `sftp -i key copart@grahovskiy.com`, `rsync -e ssh`, `scp`.
+- **CLI** — `sftp -i key copart@134.122.70.187`, `rsync -e ssh`, `scp`.
 
 ## A network drive on Windows
 
@@ -29,10 +29,10 @@ Windows cannot mount SFTP by itself; WinFsp + SSHFS-Win (both free) add that.
 
 1. Install [WinFsp](https://winfsp.dev), then [SSHFS-Win](https://github.com/winfsp/sshfs-win).
 2. The easy way — [SSHFS-Win Manager](https://github.com/evsar3/sshfs-win-manager):
-   host `grahovskiy.com`, port 22, user `copart`, authentication by private key
+   host `134.122.70.187`, port 22, user `copart`, authentication by private key
    (pick the key file), remote path `/archive`, a drive letter, mount.
 3. Without the manager: put the key at `%USERPROFILE%\.ssh\id_rsa` and in
-   Explorer → Map network drive enter `\\sshfs.k\copart@grahovskiy.com`.
+   Explorer → Map network drive enter `\\sshfs.k\copart@134.122.70.187`.
    SSHFS-Win looks only at that file name; OpenSSH reads the key type from the
    content, so an ed25519 key works under that name.
 
@@ -46,7 +46,7 @@ there is no macFUSE, no kernel extension and no reboot. Checked on macOS 26
 
 ```bash
 brew install rclone
-rclone config create copart sftp host grahovskiy.com user copart \
+rclone config create copart sftp host 134.122.70.187 user copart \
   key_file "$HOME/.ssh/id_rsa" known_hosts_file "$HOME/.ssh/known_hosts" \
   host_key_algorithms ssh-ed25519 shell_type none
 mkdir -p ~/copart-archive
