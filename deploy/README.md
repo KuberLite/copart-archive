@@ -1,9 +1,16 @@
 # Deployment
 
+**The server must be outside Russia**: from there Telegram is blocked and Copart
+answers 403 to everything, photos included (checked on a Selectel box, 2026-10-10).
+
 The archive runs in Docker — no system Python is touched (Ubuntu 22.04 ships
 3.10, the project needs 3.12).
 
 ```sh
+# a fresh Ubuntu 22.04/24.04 box: updates, 2G swap, ufw (ssh only), fail2ban,
+# keys-only ssh, docker, the read-only sftp account; safe to run again
+scp deploy/provision.sh root@HOST: && ssh root@HOST bash provision.sh
+
 # code, image and the tests in a clean container on the host; fails if the
 # tests fail, restarts the bot if it is running
 deploy/push.sh root@HOST
