@@ -1,11 +1,14 @@
 #!/bin/bash
 # Prepares a fresh Ubuntu 22.04/24.04 box for the archive. Safe to run again.
 #   scp deploy/provision.sh root@HOST: && ssh root@HOST bash provision.sh
+# SFTP_WRITABLE=1 lets the sftp account change and delete files (default: read-only);
+# the bot then runs as the same user, so both own the files they write.
 # What it does and why is in deploy/README.md; every step here was learned on a
 # real server, see the comments.
 set -euo pipefail
 BASE=/opt/copart-archive
 MEMORY=${MEMORY:-700m}  # container limit; the boxes so far had 1 GB of RAM
+SFTP_WRITABLE=${SFTP_WRITABLE:-0}
 export DEBIAN_FRONTEND=noninteractive
 say() { printf '\n== %s\n' "$*"; }
 
@@ -56,20 +59,32 @@ docker --version
 
 say "archive directories"
 mkdir -p "$BASE/app" "$BASE/archive" "$BASE/input"
-echo "MEMORY=$MEMORY" > "$BASE/host.conf"
 ls "$BASE"
 
-say "sftp: read-only, caged, keys only"
+say "sftp: caged, keys only, $([ "$SFTP_WRITABLE" = 1 ] && echo writable || echo read-only)"
 mkdir -p /srv/copart-sftp/archive
 chown root:root /srv/copart-sftp /srv/copart-sftp/archive
 chmod 755 /srv/copart-sftp /srv/copart-sftp/archive
-grep -q '/srv/copart-sftp/archive' /etc/fstab || \
-  echo "$BASE/archive /srv/copart-sftp/archive none bind,ro 0 0" >> /etc/fstab
-mountpoint -q /srv/copart-sftp/archive || mount /srv/copart-sftp/archive
+if [ "$SFTP_WRITABLE" = 1 ]; then MOUNT_OPTS=bind,rw; SFTP_CMD="internal-sftp"; else MOUNT_OPTS=bind,ro; SFTP_CMD="internal-sftp -R"; fi
+sed -i '\|/srv/copart-sftp/archive|d' /etc/fstab   # rewritten, so switching modes works
+echo "$BASE/archive /srv/copart-sftp/archive none $MOUNT_OPTS 0 0" >> /etc/fstab
+# remount in place: umount fails while a client is connected
+if mountpoint -q /srv/copart-sftp/archive; then
+  mount -o "remount,$MOUNT_OPTS" /srv/copart-sftp/archive
+else
+  mount /srv/copart-sftp/archive
+fi
+findmnt -no OPTIONS /srv/copart-sftp/archive | cut -d, -f1
 groupadd -f sftponly
 groupadd -f copart
 id copart >/dev/null 2>&1 || useradd -r -g copart -s /usr/sbin/nologin -M -d /archive copart
 usermod -aG sftponly -d /archive -p '*' copart   # '*': no password, yet not "locked" for PAM
+if [ "$SFTP_WRITABLE" = 1 ]; then
+  chown -R copart:copart "$BASE/archive"   # sftp and the bot write as copart
+  printf 'MEMORY=%s\nRUN_AS=copart\n' "$MEMORY" > "$BASE/host.conf"
+else
+  printf 'MEMORY=%s\n' "$MEMORY" > "$BASE/host.conf"
+fi
 # Keys are served by a command, NOT AuthorizedKeysFile: cloud-init reads that
 # setting on every boot, ignores the Match block, writes root's keys there and
 # closes the directory to 700 — copart then cannot read its own key.
@@ -103,6 +118,9 @@ Match Group sftponly
     X11Forwarding no
     PermitTunnel no
 CONF
+
+sed -i "s|^    ForceCommand internal-sftp.*|    ForceCommand $SFTP_CMD|" /etc/ssh/sshd_config
+grep -n "ForceCommand" /etc/ssh/sshd_config
 
 say "sshd: check, then apply"
 if sshd -t; then

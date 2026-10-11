@@ -4,8 +4,13 @@
 # sessions, which kills an attached long run. Logs stay until the next run.
 set -eu
 BASE=${BASE:-/opt/copart-archive}
-# per-host settings, e.g. MEMORY=700m on a small machine
+# per-host settings, e.g. MEMORY=700m on a small machine, or RUN_AS=copart
+# when the archive is writable over SFTP and the bot must write as that user
 [ -f "$BASE/host.conf" ] && . "$BASE/host.conf"
+USER_OPT=""
+if [ -n "${RUN_AS:-}" ]; then
+  USER_OPT="--user $(id -u "$RUN_AS"):$(id -g "$RUN_AS")"
+fi
 IMAGE=${IMAGE:-copart-archive:0.1}
 NAME=${NAME:-copart-archive-run}
 MEMORY=${MEMORY:-1g}
@@ -19,7 +24,7 @@ else
   set -- --rm "$@"
 fi
 
-exec docker run --memory="$MEMORY" \
+exec docker run --memory="$MEMORY" $USER_OPT \
   -v "$BASE/archive:/archive" \
   -v "$BASE/input:/input:ro" \
   "$@"

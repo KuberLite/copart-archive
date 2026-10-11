@@ -5,8 +5,13 @@
 #   BOT_ALLOWED_IDS=111111111 222222222
 set -eu
 BASE=${BASE:-/opt/copart-archive}
-# per-host settings, e.g. MEMORY=700m on a small machine
+# per-host settings, e.g. MEMORY=700m on a small machine, or RUN_AS=copart
+# when the archive is writable over SFTP and the bot must write as that user
 [ -f "$BASE/host.conf" ] && . "$BASE/host.conf"
+USER_OPT=""
+if [ -n "${RUN_AS:-}" ]; then
+  USER_OPT="--user $(id -u "$RUN_AS"):$(id -g "$RUN_AS")"
+fi
 IMAGE=${IMAGE:-copart-archive:0.1}
 MEMORY=${MEMORY:-1g}
 
@@ -19,7 +24,7 @@ chmod 600 "$BASE/bot.env"
 docker rm -f copart-bot >/dev/null 2>&1 || true
 docker run -d --name copart-bot \
   --restart unless-stopped \
-  --memory="$MEMORY" \
+  --memory="$MEMORY" $USER_OPT \
   --log-opt max-size=10m --log-opt max-file=3 \
   --env-file "$BASE/bot.env" \
   -v "$BASE/archive:/archive" \
