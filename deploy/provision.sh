@@ -63,8 +63,12 @@ ls "$BASE"
 
 say "sftp: caged, keys only, $([ "$SFTP_WRITABLE" = 1 ] && echo writable || echo read-only)"
 mkdir -p /srv/copart-sftp/archive
-chown root:root /srv/copart-sftp /srv/copart-sftp/archive
-chmod 755 /srv/copart-sftp /srv/copart-sftp/archive
+chown root:root /srv/copart-sftp && chmod 755 /srv/copart-sftp
+# the mount point itself only while nothing is mounted on it: on a second run it
+# shows the archive, read-only or owned by copart, and must be left alone
+if ! mountpoint -q /srv/copart-sftp/archive; then
+  chown root:root /srv/copart-sftp/archive && chmod 755 /srv/copart-sftp/archive
+fi
 if [ "$SFTP_WRITABLE" = 1 ]; then MOUNT_OPTS=bind,rw; SFTP_CMD="internal-sftp"; else MOUNT_OPTS=bind,ro; SFTP_CMD="internal-sftp -R"; fi
 sed -i '\|/srv/copart-sftp/archive|d' /etc/fstab   # rewritten, so switching modes works
 echo "$BASE/archive /srv/copart-sftp/archive none $MOUNT_OPTS 0 0" >> /etc/fstab

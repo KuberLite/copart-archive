@@ -1,18 +1,25 @@
 # Access to the archive over SFTP
 
 SFTP comes with SSH, so nothing extra runs on the server and it works from any OS.
-The account is read-only, has no shell and is caged in a directory that holds
-nothing but the archive.
+The account has no shell and is caged in a directory that holds nothing but the
+archive.
+
+**Production is writable** (since 2026-10-11, the client's call): files can be
+added, renamed and deleted over SFTP, and a deletion is final — keep the
+provider's backups on. The test box stays read-only. The mode is chosen by
+`SFTP_WRITABLE=1 bash provision.sh`; in writable mode the archive belongs to
+`copart` and the bot runs as `copart` too (`RUN_AS=copart` in `host.conf`), so
+everything in the archive has one owner.
 
 ```
 host     134.122.70.187   port 22   (production; the test box is grahovskiy.com)
-user     copart           key /root/copart-sftp-key (private, root only)
+user     copart           keys in /etc/copart-sftp/keys/copart
 path     /archive         (the real path is /opt/copart-archive/archive)
 ```
 
 `/archive` is also the account's home, so a client lands right in it.
 
-Checked after setup: `mkdir` is denied, `cd /etc` leads nowhere, an interactive
+Checked after setup (read-only mode): `mkdir` is denied, `cd /etc` leads nowhere, an interactive
 login answers "This service allows sftp connections only", port forwarding is off,
 and a file downloads fine.
 
@@ -36,13 +43,13 @@ Windows cannot mount SFTP by itself; WinFsp + SSHFS-Win (both free) add that.
    SSHFS-Win looks only at that file name; OpenSSH reads the key type from the
    content, so an ed25519 key works under that name.
 
-The drive is read-only: copying from it works, writing to it is refused.
+On production the drive is writable — deleting from it deletes on the server.
 
 ## Mounting on macOS
 
 `rclone nfsmount` serves the archive over the NFS client built into macOS, so
 there is no macFUSE, no kernel extension and no reboot. Checked on macOS 26
-(Apple Silicon): mounts without sudo, reads files, writes are refused.
+(Apple Silicon): mounts without sudo; add `--read-only` to protect the archive from the Mac side.
 
 ```bash
 brew install rclone
@@ -50,7 +57,7 @@ rclone config create copart sftp host 134.122.70.187 user copart \
   key_file "$HOME/.ssh/id_rsa" known_hosts_file "$HOME/.ssh/known_hosts" \
   host_key_algorithms ssh-ed25519 shell_type none
 mkdir -p ~/copart-archive
-rclone nfsmount copart:/archive ~/copart-archive --read-only \
+rclone nfsmount copart:/archive ~/copart-archive \
   --vfs-cache-mode full --vfs-cache-max-size 2G --volname "Copart archive" --daemon
 ```
 
